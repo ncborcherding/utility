@@ -9,6 +9,7 @@ This repository contains the code for the initial processing and annotating of t
 This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 
 3) iterating through automatic annotation, 4) unifying annotation via manual inspection and enrichment analysis, and 5) adding the TCR information. 
 
+*****
 ### Methods
 
 #### Single-Cell Data Processing
@@ -21,11 +22,11 @@ Automatic annotation was performed using the singler (v1.4.1) R package [citatio
 #### Addition of TCR data
 
 The filtered contig annotation T cell receptor (TCR) data for available sequencing runs were loaded into the R global environment. Individual contigs were combined using the combineTCR() function of scRepertoire (v1.3.2) R Package ([citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)). Clonotypes were assignmed to barcodes only if they contained both TCRA and TCRB chains and multiples of the same chain were removed. The clonotype data was then added to the Seurat Object with proportion across indiviual patients being used to calculate frequency.
-
+*****
 ### Getting Data
 
 Due to the size of the files, the processed 10x Genomics outputs and processed data outputs from the anlaytical pipeline are available here (link to come).
-
+*****
 ### Citations
 
 As of right now, there is no citation associated with the assembled data set. However if using the data, please find the corresponding manuscipt for 
@@ -44,6 +45,6 @@ methods section (above) and please cite the appropriate manuscripts of the softw
 * Human Primary Cell Atlas (HPCA) - [citation](https://pubmed.ncbi.nlm.nih.gov/24053356/)  
 * Database Immune Cell Expression (DICE) - [citation](https://pubmed.ncbi.nlm.nih.gov/30449622/)  
 * Immune-related Gene Sets - [citation](https://pubmed.ncbi.nlm.nih.gov/29961579/)
-
+*****
 ### Contact
 Questions, comments, suggestions, please feel free to contact Nick Borcherding via this repository, [email](mailto:ncborch@gmail.com), or using [twitter](https://twitter.com/theHumanBorch). 
