@@ -26,7 +26,7 @@ The filtered contig annotation T cell receptor (TCR) data for available sequenci
 *****
 ### Getting Data
 
-Due to the size of the files, the processed 10x Genomics outputs and processed data outputs from the analytical pipeline are available here (link to come).
+Due to the size of the files, the processed 10x Genomics outputs and processed data outputs from the analytical pipeline are available [here](https://zenodo.org/record/4995299).
 
 *****
 ### Citations
