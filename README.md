@@ -55,7 +55,7 @@ methods section (above) and please cite the appropriate manuscripts of the softw
 * Easy Submission Portal for Researchers to Add Data
 * Using the Data to Build a Reference Atlas
 
-There are areas in which we are actively hoping to develop to further facilitate the usefulness of the data set - if you have other suggestions, please reach out using the contact information at the below.
+There are areas in which we are actively hoping to develop to further facilitate the usefulness of the data set - if you have other suggestions, please reach out using the contact information below.
 
 *****
 ### Contact
