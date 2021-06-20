@@ -28,6 +28,24 @@ The filtered contig annotation T cell receptor (TCR) data for available sequenci
 
 Due to the size of the files, the processed 10x Genomics outputs and processed data outputs from the analytical pipeline are available [here](https://zenodo.org/record/4995299).
 
+******
+### Working with the Data
+
+There is no assigned clusters across the single-cells. In order to incorporate additional data sets for use, we opted not to cluster. Clustering can easily be performed using the code below:
+
+```
+seuratObject <- FindNeighbors(seuratObject, reduction = "harmony") 
+seuratObject <- FindClusters(seuratObject)
+```
+
+If subseting the data to focus on specific cell types, you will need to re-run harmony:
+
+```
+subset.1 <- subset(seuratObject, "Consensus.Major" == "T_cell")
+subset.1 <- RunHarmony(subset.1, group.by.vars = c("Cohort", "Sample"), max.iter.harmony = 20)
+subset.1 <- RunUMAP(subset.1, reduction = "harmony", dims = 1:20)
+```
+
 *****
 ### Citations
 
