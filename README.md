@@ -7,7 +7,7 @@ and improve the [scRepertoire](https://github.com/ncborcherding/scRepertoire) R 
 the data set for everyone, a complete summary of the sequencing runs and the sample information can be found in the meta data of the Seurat object. 
 This repository contains the code for the initial processing and annotating of the data set (we are calling this version 0.0.1). 
 This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 
-3) iterating through automatic annotation, 4) unifying annotation via manual inspection and enrichment analysis, and 5) adding the TCR information. 
+3) iterating through automatic annotation, 4) unifying annotation via manual inspection and enrichment analysis, and 5) adding the TCR information. This information is stored in the meta data of the Seurat object - an explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/main/meta.data.headers.txt).
 
 *****
 ### Methods
