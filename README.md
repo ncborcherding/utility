@@ -1,5 +1,5 @@
 # utility
-Collection of Tumor-Infiltrating Lymphocyte Single-Cell Experiments with TCR
+Collection of Tumor-Infiltrating Lymphocyte Single-Cell Experiments with TCR sequencing data
 
 ### Introduction
 The original intent of assembling a data set of publicly-available tumor-infiltrating T cells (TILs) with paired TCR sequencing was to expand 
