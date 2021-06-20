@@ -38,7 +38,7 @@ seuratObject <- FindNeighbors(seuratObject, reduction = "harmony")
 seuratObject <- FindClusters(seuratObject)
 ```
 
-If subseting the data to focus on specific cell types, you will need to re-run harmony:
+If subseting the data, either by cell type or other variables in the meta data, re-intergratrion using Harmony will be required:
 
 ```
 subset.1 <- subset(seuratObject, "Consensus.Major" == "T_cell")
