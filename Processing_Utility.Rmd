@@ -144,6 +144,9 @@ rownames(meta) <- rownames
 
 list <- AddMetaData(list, meta)
 
+cohortSummary <- table(list$Cohort, list$Type)
+write.table(cohortSummary, file = "cohortSummaryTable.txt")
+
 ####################################################
 #Correcting for Cohort and Sample and getting UMAP
 ###################################################
@@ -554,7 +557,7 @@ saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
 The preceding was all of the code generated to produce the final seurat object. To reiterate - questions, comments, suggestions, please feel free to contact Nick Borcherding via this repository, [email](mailto:ncborch@gmail.com), or using [twitter](https://twitter.com/theHumanBorch). **Also** if you are interested in dimensional reduction of TCR sequencing data, please get in touch as that is the intent of the assembled data and we would love to talk more!
 
 ```{r}
-sessionInfo()
+writeLines(capture.output(sessionInfo()), "sessionInfo.txt")
 ```
 
 
