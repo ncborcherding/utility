@@ -23,6 +23,10 @@ Automatic annotation was performed using the singler (v1.4.1) R package ([citati
 
 The filtered contig annotation T cell receptor (TCR) data for available sequencing runs were loaded into the R global environment. Individual contigs were combined using the combineTCR() function of scRepertoire (v1.3.2) R Package ([citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)). Clonotypes were assigned to barcodes and were multiple duplicate chains for individual cells were filtered to select for the top expressing contig by read count. The clonotype data was then added to the Seurat Object with proportion across individual patients being used to calculate frequency.
 
+#### Session Info
+
+Session Info for the intial data processing and analysis can be found [here](https://github.com/ncborcherding/utility/blob/main/sessionInfo.txt).
+
 *****
 ### Getting Data
 
@@ -50,7 +54,7 @@ subset.1 <- RunUMAP(subset.1, reduction = "harmony", dims = 1:20)
 ### Citations
 
 As of right now, there is no citation associated with the assembled data set. However if using the data, please find the corresponding manuscript for 
-each data set in the meta.data of the single-cell object. In addition, if using the processed data, feel free to modify the language in the 
+each data set in the meta.data of the single-cell object or the [summary table](https://github.com/ncborcherding/utility/blob/main/cohortSummaryTable.txt). In addition, if using the processed data, feel free to modify the language in the 
 methods section (above) and please cite the appropriate manuscripts of the software or references that were used.
 
 #### Itemized List of the Software Used
