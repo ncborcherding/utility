@@ -4,3 +4,7 @@
 #Changes to Version 0.0.2
 #########################
 * Added NEWS file
+* Removed intermediate "filtered_seuratObjects.rds" from code and stored
+* Added summaryInfo directory for session info, sample directory, cohort summary
+* Placed input/output of projectil and SingleR in new annotation folder
+* Updated Readme to include table and corresponding link changes
