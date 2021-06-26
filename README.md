@@ -7,7 +7,7 @@ and improve the [scRepertoire](https://github.com/ncborcherding/scRepertoire) R 
 the data set for everyone, a complete summary of the sequencing runs and the sample information can be found in the meta data of the Seurat object. 
 This repository contains the code for the initial processing and annotating of the data set (we are calling this version 0.0.1). 
 This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 
-3) iterating through automatic annotation, 4) unifying annotation via manual inspection and enrichment analysis, and 5) adding the TCR information. This information is stored in the meta data of the Seurat object - an explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/main/meta.data.headers.txt).
+3) iterating through automatic annotation, 4) unifying annotation via manual inspection and enrichment analysis, and 5) adding the TCR information. This information is stored in the meta data of the Seurat object - an explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
 
 #### Cohort Information
 Here is the current list of data sources, the number of cells that passed filtering by tissue type. Please cite the data if you are using utility!
@@ -39,7 +39,7 @@ The filtered contig annotation T cell receptor (TCR) data for available sequenci
 
 #### Session Info
 
-Session Info for the intial data processing and analysis can be found [here](https://github.com/ncborcherding/utility/blob/main/sessionInfo.txt).
+Session Info for the intial data processing and analysis can be found [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/sessionInfo.txt).
 
 *****
 ### Getting Data
@@ -68,7 +68,7 @@ subset.1 <- RunUMAP(subset.1, reduction = "harmony", dims = 1:20)
 ### Citations
 
 As of right now, there is no citation associated with the assembled data set. However if using the data, please find the corresponding manuscript for 
-each data set in the meta.data of the single-cell object or the [summary table](https://github.com/ncborcherding/utility/blob/main/cohortSummaryTable.txt). In addition, if using the processed data, feel free to modify the language in the 
+each data set summarized above or can be found in the [summary table](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/cohortSummaryTable.csv). In addition, if using the processed data, feel free to modify the language in the 
 methods section (above) and please cite the appropriate manuscripts of the software or references that were used.
 
 #### Itemized List of the Software Used

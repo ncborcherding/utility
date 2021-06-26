@@ -124,14 +124,13 @@ list <- FindVariableFeatures(list, selection.method = "vst",
         nfeatures = 2000, verbose = FALSE, assay = "RNA")
 list <- ScaleData(object = list, verbose = FALSE)
 list <- RunPCA(object = list, npcs = 40, verbose = FALSE)
-saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects.rds")
 
 #######################
 #Adding the meta data 
 #######################
 
 '%!in%' <- Negate('%in%')
-directory <- readxl::read_xlsx("sample.directory.xlsx") #Meta.data
+directory <- readxl::read_xlsx("./summaryInfo/sample.directory.xlsx") #Meta.data
 label <- stringr::str_split(rownames(list[[]]), "_", simplify = T)[,1]
 list[["orig.ident"]] <- label
 meta <- list[[]]
@@ -144,8 +143,9 @@ rownames(meta) <- rownames
 
 list <- AddMetaData(list, meta)
 
+dir.create("./summaryInfo")
 cohortSummary <- table(list$Cohort, list$Type)
-write.table(cohortSummary, file = "cohortSummaryTable.txt")
+write.csv(cohortSummary, file = "./summaryInfo/cohortSummaryTable.csv")
 
 ####################################################
 #Correcting for Cohort and Sample and getting UMAP
@@ -194,11 +194,11 @@ library(celldex)
 #Two data sets - HPCA and DICE will be used
 HPCA <- HumanPrimaryCellAtlasData()
 DICE <- DatabaseImmuneCellExpressionData()
-
-dir.create("./singler/")       
+dir.create("./annotation/") 
+dir.create("./annotation/singler/")       
 library(Matrix)
 samples <- unique(list$Sample)
-for (i in seq_along(samples)) {
+for (i in seq_along(samples)) { 
   tmp <- subset(list, Sample == samples[i])
   tmp <- SplitObject(tmp, split.by = "Type")
 for (j in seq_along(tmp)) {
@@ -208,9 +208,9 @@ for (j in seq_along(tmp)) {
   tmp.2 <- tmp.2[tabulate(summary(tmp.2)$i) != 0, , drop = FALSE]
   tmp.2 <- as.matrix(tmp.2)
   com.res1 <- SingleR(tmp.2, ref=HPCA, labels=HPCA$label.fine, assay.type.test=1)
-  saveRDS(com.res1, file = paste0("./singler/",  samples[i], "_", names(tmp)[j], "_HPCA.singler_output.rds"))
+  saveRDS(com.res1, file = paste0("./annotation/singler/",  samples[i], "_", names(tmp)[j], "_HPCA.singler_output.rds"))
   com.res2 <- SingleR(tmp.2, ref=DICE, labels=DICE$label.fine, assay.type.test=1)
-  saveRDS(com.res1, file = paste0("./singler/",  samples[i], "_", names(tmp)[j], "_DICE.singler_output.rds"))
+  saveRDS(com.res1, file = paste0("./annotation/singler/",  samples[i], "_", names(tmp)[j], "_DICE.singler_output.rds"))
   rm(tmp.2, com.res1, com.res2)
   }
 }
@@ -222,13 +222,13 @@ rm(DICE)
 #Adding Annotation from SingleR
 ##################################
 
-sing.list <- list.files("./singler/")
+sing.list <- list.files("./annotation/singler/")
 HPCA.ann <- NULL
 dice.ann <- NULL
 
 
 for ( i in seq_along(sing.list)) {
-  ann <- readRDS(paste0("./singler/", sing.list[i]))
+  ann <- readRDS(paste0("../annotation/singler/", sing.list[i]))
   df <- data.frame("first.labels" = ann$first.labels, "labels" = ann$labels, "pruned.labels" = ann$pruned.labels)
   rownames(df) <- rownames(ann)
   if(grepl("HPCA", sing.list[i])) {
@@ -251,8 +251,8 @@ list <- AddMetaData(list,  dice.ann)
 ##########################
 
 library(ProjecTILs)
-ref <- load.reference.map()
-dir.create("./projectil/")
+ref <- load.reference.map("./annotation/ref_TILAtlas_mouse_v1.rds")
+dir.create("./annotation/projectil/")
 samples <- unique(list$Sample)
 for (i in seq_along(samples)) {
   tmp <- subset(list, Sample == samples[i])
@@ -261,7 +261,7 @@ for (i in seq_along(samples)) {
     query.projected <- make.projection(tmp[[j]], ref = ref, ncores = 1)
     query.projected <- cellstate.predict(ref = ref, query = query.projected)
     meta <- query.projected[[c("functional.cluster", "functional.cluster.conf")]]
-    saveRDS(meta, file = paste0("./projectil/",  samples[i], "_", names(tmp)[j],  "_output.rds"))
+    saveRDS(meta, file = paste0("./annotation/projectil/",  samples[i], "_", names(tmp)[j],  "_output.rds"))
     rm(query.projected)
   }
 }
@@ -270,10 +270,10 @@ for (i in seq_along(samples)) {
 #Adding Annotation from projecTIL
 ##################################
 
-pro.list <- list.files("./projectil/")
+pro.list <- list.files("./annotation/projectil/")
 proj.annot <- NULL
 for ( i in seq_along(pro.list)) {
-  ann <- readRDS(paste0("./projectil/", pro.list[i]))
+  ann <- readRDS(paste0("./annotation/projectil/", pro.list[i]))
   rownames(ann) <- stringr::str_remove(rownames(ann), "Q_") #Removes the Q that is added as a prefix
   proj.annot <- rbind(proj.annot, ann)
 }
@@ -557,7 +557,7 @@ saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
 The preceding was all of the code generated to produce the final seurat object. To reiterate - questions, comments, suggestions, please feel free to contact Nick Borcherding via this repository, [email](mailto:ncborch@gmail.com), or using [twitter](https://twitter.com/theHumanBorch). **Also** if you are interested in dimensional reduction of TCR sequencing data, please get in touch as that is the intent of the assembled data and we would love to talk more!
 
 ```{r}
-writeLines(capture.output(sessionInfo()), "sessionInfo.txt")
+writeLines(capture.output(sessionInfo()), "/summaryInfo/sessionInfo.txt")
 ```
 
 
