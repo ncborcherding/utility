@@ -12,16 +12,16 @@ This involves several steps 1) loading the respective GE data, 2) harmonizing th
 #### Cohort Information
 Here is the current list of data sources, the number of cells that passed filtering by tissue type. Please cite the data if you are using utility!
 
-|             | Blood | Juxta | LN   | Normal | Tumor | Cancer Type | Citation |
-|-------------|-------|-------|------|--------|-------|-------------|----------|
-| CCR-20-4394 | 0     | 0     | 0    | 0      | 26767 | Ovarian     |[cite](https://clincancerres.aacrjournals.org/content/early/2021/06/10/1078-0432.CCR-20-4394) |
-| GSE114724   | 0     | 0     | 0    | 0      | 27651 | Breast      |[cite](https://pubmed.ncbi.nlm.nih.gov/29961579/) |
-| GSE121636   | 12322 | 0     | 0    | 0      | 11436 | Renal       |[cite](https://pubmed.ncbi.nlm.nih.gov/33504936/) |
-| GSE139555   | 20676 | 0     | 0    | 70114  | 83336 | Multiple    |[cite](https://pubmed.ncbi.nlm.nih.gov/32103181/) |
-| GSE144469   | 0     | 0     | 0    | 41311  | 86436 | Colorectal  |[cite](https://pubmed.ncbi.nlm.nih.gov/32603654/) |
-| GSE145370   | 0     | 0     | 0    | 41081  | 66739 | Esophageal  |[cite](https://pubmed.ncbi.nlm.nih.gov/33293583/) |
-| GSE148190   | 0     | 0     | 6370 | 0      | 2263  | Melanoma    |[cite](https://pubmed.ncbi.nlm.nih.gov/32539073/) |
-| GSE162500   | 23426 | 3771  | 0    | 0      | 14647 | Lung        |[cite](https://pubmed.ncbi.nlm.nih.gov/33514641/) |
+|             | Blood | Juxta | LN   | Normal | Tumor | Cancer Type | Date Added | Citation |
+|-------------|-------|-------|------|--------|-------|-------------|------------|----------|
+| CCR-20-4394 | 0     | 0     | 0    | 0      | 26767 | Ovarian     | 6/19/21 |[cite](https://clincancerres.aacrjournals.org/content/early/2021/06/10/1078-0432.CCR-20-4394) |
+| GSE114724   | 0     | 0     | 0    | 0      | 27651 | Breast      | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/29961579/) |
+| GSE121636   | 12322 | 0     | 0    | 0      | 11436 | Renal       | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/33504936/) |
+| GSE139555   | 20676 | 0     | 0    | 70114  | 83336 | Multiple    | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/32103181/) |
+| GSE144469   | 0     | 0     | 0    | 41311  | 86436 | Colorectal  | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/32603654/) |
+| GSE145370   | 0     | 0     | 0    | 41081  | 66739 | Esophageal  | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/33293583/) |
+| GSE148190   | 0     | 0     | 6370 | 0      | 2263  | Melanoma    | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/32539073/) |
+| GSE162500   | 23426 | 3771  | 0    | 0      | 14647 | Lung        | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/33514641/) |
 
 *****
 ### Methods
