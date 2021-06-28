@@ -40,7 +40,7 @@ Questions, comments, suggestions, please feel free to contact Nick Borcherding v
 
 In general I like to load libraries here that we will use universally or during the intitation process, and then call other libraries when we need them in the code chunks that are relevant. 
 
-```{r}
+```{r setup, include=FALSE}
 suppressPackageStartupMessages(library(Seurat))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(dplyr))
@@ -48,6 +48,7 @@ suppressPackageStartupMessages(library(gridExtra))
 suppressPackageStartupMessages(library(viridis))
 suppressPackageStartupMessages(library(scDblFinder))
 suppressPackageStartupMessages(library(BiocParallel))
+suppressPackageStartupMessages(library(RColorBrewer))
 ```
 
 I also like to set a color palette before I begin - this way all the colors are consistent throughout figures. 
@@ -80,6 +81,7 @@ for (i in seq_along(file_list)){
       rownames(tmp)[x] <- y
     }
     tmp <- CreateSeuratObject(counts = tmp)
+    tmp <- subset(tmp, subset = nFeature_RNA > 100) #filter out low count/feature cells
     tmp  <- RenameCells(object = tmp , new.names = paste0(file_list[i], "_", rownames(tmp[[]])))
 
     tmp[["mito.genes"]] <- PercentageFeatureSet(tmp, pattern = "^MT-")
@@ -210,25 +212,26 @@ for (j in seq_along(tmp)) {
   com.res1 <- SingleR(tmp.2, ref=HPCA, labels=HPCA$label.fine, assay.type.test=1)
   saveRDS(com.res1, file = paste0("./annotation/singler/",  samples[i], "_", names(tmp)[j], "_HPCA.singler_output.rds"))
   com.res2 <- SingleR(tmp.2, ref=DICE, labels=DICE$label.fine, assay.type.test=1)
-  saveRDS(com.res1, file = paste0("./annotation/singler/",  samples[i], "_", names(tmp)[j], "_DICE.singler_output.rds"))
+  saveRDS(com.res2, file = paste0("./annotation/singler/",  samples[i], "_", names(tmp)[j], "_DICE.singler_output.rds"))
   rm(tmp.2, com.res1, com.res2)
   }
 }
 
 rm(HPCA)
 rm(DICE)
+rm(tmp)
 
 #################################
 #Adding Annotation from SingleR
 ##################################
 
-sing.list <- list.files("./annotation/singler/")
+sing.list <- list.files("./annotation/singler/", pattern = ".rds")
 HPCA.ann <- NULL
 dice.ann <- NULL
 
 
 for ( i in seq_along(sing.list)) {
-  ann <- readRDS(paste0("../annotation/singler/", sing.list[i]))
+  ann <- readRDS(paste0("./annotation/singler/", sing.list[i]))
   df <- data.frame("first.labels" = ann$first.labels, "labels" = ann$labels, "pruned.labels" = ann$pruned.labels)
   rownames(df) <- rownames(ann)
   if(grepl("HPCA", sing.list[i])) {
@@ -241,7 +244,9 @@ for ( i in seq_along(sing.list)) {
 }
 list <- AddMetaData(list,  HPCA.ann)
 list <- AddMetaData(list,  dice.ann)
-
+rm(dice.ann)
+rm(HPCA.ann)
+rm(ann)
 
 ## Using ProjecTIL
 
@@ -270,7 +275,7 @@ for (i in seq_along(samples)) {
 #Adding Annotation from projecTIL
 ##################################
 
-pro.list <- list.files("./annotation/projectil/")
+pro.list <- list.files("./annotation/projectil/", pattern = ".rds")
 proj.annot <- NULL
 for ( i in seq_along(pro.list)) {
   ann <- readRDS(paste0("./annotation/projectil/", pro.list[i]))
@@ -289,15 +294,19 @@ saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
 #Towards a more perfect union (of annotation)
 #############################################
 
-consensus.df <- data.frame(DICE = stringr::str_split(list[[]]$DICE.pruned.labels, ":", simplify = TRUE)[,1], 
+consensus.df <- data.frame(DICE = stringr::str_split(list[[]]$DICE.pruned.labels, ",", simplify = TRUE)[,1], 
                            HPCA = stringr::str_split(list[[]]$HPCA.pruned.labels, ":", simplify = TRUE)[,1], 
                            PTIL = list[[]]$functional.cluster)
 
 
-consensus.df$PTIL <- ifelse(!is.na(consensus.df$PTIL), "T_cell", NA)
+consensus.df$DICE<- gsub(" ", "_", consensus.df$DICE)
+  consensus.df$HPCA<- paste0(consensus.df$HPCA, "s")
+  
+  
+  consensus.df$PTIL <- ifelse(!is.na(consensus.df$PTIL), "T_cells", NA)
 consensus.major <- NULL
 for (i in 1:nrow(consensus.df)) {
-  T.length <- length(which(consensus.df[i,] %in% "T_cell"))
+  T.length <- length(which(consensus.df[i,] %in% "T_cells"))
   
   if (T.length >= 2) {
     consensus.major[i] <- "T_cell"
@@ -307,7 +316,7 @@ for (i in 1:nrow(consensus.df)) {
       consensus.major[i] <- "no.annotation"
       next()
     }
-    if (cellType[1] == cellType[2] & is.na(cellType[3])) {
+    if (cellType[1] == cellType[2] & is.na(cellType[3]) | length(which(is.na(cellType))) == 2) {
       consensus.major[i] <- cellType[1]
     } else {
       consensus.major[i] <- "mixed.annotation"
@@ -326,10 +335,13 @@ consensus.Tcell <- NULL
 for (i in 1:nrow(consensus.df)) {
   CD8.length <- length(which(grepl("CD8", consensus.df[i,])))
   CD4.length <- length(which(grepl("CD4", consensus.df[i,])))
+  Treg.length <- length(which(grepl("Treg|TREG", consensus.df[i,])))
   if (CD8.length >= 2){
     consensus.Tcell[i] <- "CD8"
   } else if (CD4.length >= 2) {
     consensus.Tcell[i] <- "CD4"
+  } else if (Treg.length >= 2) {
+    consensus.Tcell[i] <- "Treg"
   } else {
     consensus.Tcell[i] <- NA
   }
@@ -340,14 +352,6 @@ rownames(consensus.Tcell) <- rownames(list[[]])
 list <- AddMetaData(list, consensus.major)
 list <- AddMetaData(list, consensus.Tcell)
 
-############################################################
-#Simplify consensus annotation
-#If something appears <= 100 times, we are labeling as other
-############################################################
-table <- table(list[["consensus.major"]])
-table <- table[table > 100]
-list$consensus.major <- ifelse(list$consensus.major %in% names(table), list$consensus.major, "other")
-list$consensus.major <- ifelse(list$consensus.major == "no.annotation", "other", list$consensus.major)
 saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
 ```
 
@@ -368,17 +372,23 @@ dir.create("./UMAP")
 DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)], group.by = "consensus.major") + 
   scale_color_manual(values = mycolors) + 
   theme(plot.title = element_blank())
-ggsave("./UMAP/major.consensus.pdf", height = 3.5, width = 5.5)
+ggsave("./UMAP/major.consensus.pdf", height = 3.5, width = 5)
+
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(list$DICE.pruned.labels)))
+DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)], group.by = "DICE.pruned.labels") + 
+  scale_color_manual(values = mycolors) + 
+  theme(plot.title = element_blank())
+ggsave("./UMAP/DICE.pdf", height = 3.5, width = 6)
 
 DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)], group.by = "consensus.Tcell") + 
-  scale_color_manual(values = mycolors[c(1,3)], na.value="grey") + 
+  scale_color_manual(values = mycolors[c(1,3,5)], na.value="grey") + 
   theme(plot.title = element_blank())
-ggsave("./UMAP/Tcell.consensus.pdf", height = 3.5, width = 4)
+ggsave("./UMAP/Tcell.consensus.pdf", height = 3.5, width = 4.25)
 
 
 # Looking at canonical marker expression
 
-dir.create("DataAnalysis/UMAP/LineageMarkers")
+dir.create("./UMAP/LineageMarkers")
 
 file_list <- list.files("./data/ProcessedData/markers.genes")
 file_list <- file_list[grepl(".txt", file_list)]
@@ -398,7 +408,7 @@ names(marker_list) <- names
 #Graphing canonical marker genes
 #################################
 #I like to use the schex package in order to look at the percentage of cells in the area of the UMAP with GeneX expression
-#This prevents the issue with overlap that can be seen in DotPlots, reduces the size of the subsequent visualization files, and as UMAP is based on nearest neighbor it make more sense to incorporate neighbors while visualizing (at least to me, I have a reviewer or two that have not been so inclined)
+#This prevents the issue with overlap that can be seen in DotPlots, reduces the size of the subsequent visualization files, and as UMAP is based on nearest neighbor it make more sense to incorporate neighbors while visualizing (at least to me, I have had a reviewer or two that have not been so inclined)
 
 suppressPackageStartupMessages(library(schex))
 
@@ -451,7 +461,6 @@ saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
 ########################################
 
 set.seed(123)
-x <- sample(nrow(list[[]]), 20000)
 set.names <- paste0(names(signature.list), "_UCell")
 dir.create("./UMAP/GeneEnrichment")
 
@@ -549,6 +558,14 @@ ggsave("./UMAP/ClonotypeExpansion.pdf", height = 3.5, width = 6)
 
 
 saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
+```
+
+# Banner Image Summary
+```{r}
+library(patchwork)
+
+
+
 ```
 
 

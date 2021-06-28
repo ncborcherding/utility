@@ -3,8 +3,17 @@
 ##########################
 #Changes to Version 0.0.2
 #########################
+Administrative Changes
 * Added NEWS file
 * Removed intermediate "filtered_seuratObjects.rds" from code and stored
 * Added summaryInfo directory for session info, sample directory, cohort summary
 * Placed input/output of projectil and SingleR in new annotation folder
 * Updated Readme to include table and corresponding link changes
+
+Processing Data Workflow Changes
+* Added filter for nFeature > 100 to initial filter steps
+* Fixed issue with DICE annotation (not save correctly)
+* Modified consensus annotation to accommodate DICE change
+
+Other Code Changes
+* Initial script for cohort addition (Adding Cohort)
