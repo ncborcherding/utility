@@ -564,8 +564,38 @@ saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
 ```{r}
 library(patchwork)
 
+set.seed(123)
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(list$Tissue)))
+plot1 <- DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)], group.by = "Tissue") + 
+  theme_void() +
+  scale_color_manual(values = mycolors) + 
+  theme(plot.title = element_blank(), 
+        legend.text=element_text(size=6)) 
 
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(list$DICE.pruned.labels)))
 
+plot2 <- DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)], group.by = "DICE.pruned.labels") + 
+  theme_void()+
+  scale_color_manual(values = mycolors) + 
+  theme(plot.title = element_blank(), 
+        legend.text=element_text(size=6)) 
+
+breakdown <- as.data.frame(table(list$Type, list$Tissue))
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(8)
+plot3 <- ggplot(breakdown, aes(x=Var2, y = Freq, fill = Var1)) + 
+  geom_bar(stat = "identity", position = "fill") + 
+  scale_x_discrete(limits = rev(levels(breakdown$Var2))) +
+  ylab("Proportion of Cells") + 
+  labs(fill='Tissues') +
+  scale_fill_manual(values = mycolors) + 
+  theme_classic() + 
+  coord_flip() + 
+  theme(axis.title.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(), legend.text=element_text(size=6))
+
+plot1 + plot2 + plot3 + plot_layout(widths = c(3, 3, 1))
+ggsave("./UMAP/banner.jpg", height = 4, width = 10, dpi = 600)
 ```
 
 
