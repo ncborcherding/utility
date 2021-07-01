@@ -23,6 +23,7 @@ Here is the current list of data sources, the number of cells that passed filter
 | GSE144469   | 0     | 0     | 0    | 41311  | 86436 | Colorectal  | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/32603654/) |
 | GSE145370   | 0     | 0     | 0    | 41081  | 66739 | Esophageal  | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/33293583/) |
 | GSE148190   | 0     | 0     | 6370 | 0      | 2263  | Melanoma    | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/32539073/) |
+| GSE154826   | 0     | 0     | 0    |13414   | 14491 | Lung        | 6/21/21 |[cite](https://www.biorxiv.org/content/10.1101/2020.07.16.207605v2.abstract) |
 | GSE162500   | 23426 | 3771  | 0    | 0      | 14647 | Lung        | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/33514641/) |
 
 *****
