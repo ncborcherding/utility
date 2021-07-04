@@ -19,6 +19,7 @@ Here is the current list of data sources, the number of cells that passed filter
 | CCR-20-4394 | 0     | 0     | 0    | 0      | 26767 | Ovarian     | 6/19/21 |[cite](https://clincancerres.aacrjournals.org/content/early/2021/06/10/1078-0432.CCR-20-4394) |
 | GSE114724   | 0     | 0     | 0    | 0      | 27651 | Breast      | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/29961579/) |
 | GSE121636   | 12322 | 0     | 0    | 0      | 11436 | Renal       | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/33504936/) |
+| GSE123814   | 0     | 0     | 0    | 0      | 78034 | Multiple    | 7/4/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/31359002/) |
 | GSE139555   | 20676 | 0     | 0    | 70114  | 83336 | Multiple    | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/32103181/) |
 | GSE144469   | 0     | 0     | 0    | 41311  | 86436 | Colorectal  | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/32603654/) |
 | GSE145370   | 0     | 0     | 0    | 41081  | 66739 | Esophageal  | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/33293583/) |
@@ -83,7 +84,7 @@ methods section (above) and please cite the appropriate manuscripts of the softw
 * harmony v1.0 - [citation](https://pubmed.ncbi.nlm.nih.gov/31740819/)  
 * singler v1.4.1 - [citation](https://pubmed.ncbi.nlm.nih.gov/30643263/)  
 * ProjecTILs v0.4.1 - [citation](https://pubmed.ncbi.nlm.nih.gov/34017005/)
-* UCell v1.0.0 - [citation](https://www.biorxiv.org/content/10.1101/2021.04.13.439670v1)  
+* UCell v1.0.0 - [citation](https://www.sciencedirect.com/science/article/pii/S2001037021002816?via%3Dihub)  
 * scRepertoire v1.3.2 - [citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)  
 
 #### Itemized List of Reference Data Used
