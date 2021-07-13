@@ -559,6 +559,12 @@ ggsave("./UMAP/ClonotypeExpansion.pdf", height = 3.5, width = 6)
 
 saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
 ```
+# Saving Meta Data for Use in Figures/Reference
+
+```{r}
+meta <- data.frame(list[[]], list@reductions$umap@cell.embeddings)
+saveRDS(meta, file = "./data/processedData/meta.rds")
+```
 
 # Banner Image Summary
 ```{r}
@@ -566,7 +572,7 @@ library(patchwork)
 
 set.seed(123)
 mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(list$Tissue)))
-plot1 <- DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)], group.by = "Tissue") + 
+plot1 <- DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "Tissue") + 
   theme_void() +
   scale_color_manual(values = mycolors) + 
   theme(plot.title = element_blank(), 
@@ -574,7 +580,7 @@ plot1 <- DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)]
 
 mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(list$DICE.pruned.labels)))
 
-plot2 <- DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)], group.by = "DICE.pruned.labels") + 
+plot2 <- DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "DICE.pruned.labels") + 
   theme_void()+
   scale_color_manual(values = mycolors) + 
   theme(plot.title = element_blank(), 
