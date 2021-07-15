@@ -1,0 +1,102 @@
+---
+title: "Figures"
+author: "Nick Borcherding"
+date: "7/13/2021"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(RColorBrewer)
+library(viridis)
+```
+
+```{r}
+meta <- readRDS("./data/processedData/meta.rds")
+dir.create("./Figures")
+```
+
+```{r}
+set.seed(123)
+
+
+plot <- ggplot(meta, aes(x= UMAP_1, y = UMAP_2) )+ 
+    geom_point(color = "grey", size = 0.25) + 
+    theme(plot.title = element_blank()) + 
+    theme_void()
+
+plot + 
+    stat_density_2d(meta, mapping = aes(x = UMAP_1, y = UMAP_2, fill = ..level..), geom = "polygon", h =2) + 
+    scale_fill_viridis() +
+    facet_wrap(.~Tissue, nrow = 2) + 
+    guides(fill = FALSE) +
+    theme(strip.background = element_blank(),
+  strip.text.x = element_blank()) + 
+ggsave("./Figures/TissueDensity.png", height = 6, width = 15, dpi = 600,  bg = "transparent")
+
+plot + 
+    stat_density_2d(meta, mapping = aes(x = UMAP_1, y = UMAP_2, fill = ..level..), geom = "polygon", h =2) + 
+    scale_fill_viridis() +
+    facet_grid(.~Type) + 
+    guides(fill = FALSE)  + 
+    theme(strip.background = element_blank(),
+  strip.text.x = element_blank()) + 
+ggsave("./Figures/TypeDensity.png", height = 3, width = 15, dpi = 600,  bg = "transparent")
+
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(meta$functional.cluster)))
+
+ggplot(meta[sample(nrow(meta), 100000),], aes(x= UMAP_1, y = UMAP_2, color = functional.cluster) )+ 
+    geom_point(size = 0.25) + 
+    theme(plot.title = element_blank()) + 
+    theme_void() + 
+    guides(color = F) +
+    scale_color_manual(values = mycolors, na.value="grey") 
+ggsave("./Figures/Tpred.png", height = 3, width = 3, dpi = 600,  bg = "transparent")
+
+meta$cloneType
+sub<- sub[order(sub$cluster.sq, decreasing = T),]
+
+meta$cloneType <- factor(meta$cloneType, levels = rev(c(NA,"Rare (0 < X <= 1e-04)", "Small (1e-04 < X <= 0.001)", "Medium (0.001 < X <= 0.01)", "Large (0.01 < X <= 0.1)", "Hyperexpanded (0.1 < X <= 1)")), exclude = NULL)
+meta <- meta[order(meta$cloneType, decreasing = T),]
+
+#Going to look at 80,000 cells in the UMAP just to better see distribution
+
+ggplot(meta[sample(nrow(meta), 100000),], aes(x= UMAP_1, y = UMAP_2, color = factor(cloneType)))+ 
+    geom_point(size = 0.25) + 
+    theme(plot.title = element_blank()) + 
+    theme_void() + 
+    guides(color = F) +
+    scale_color_manual(values = rev(viridis_pal()(5)), na.value="grey") 
+ggsave("./Figures/Clonotype.png", height = 3, width = 3, dpi = 600,  bg = "transparent")
+```
+```{r}
+library(bluster)
+set.seed(0101010)
+kgraph.clusters <- clusterRows(na.omit(meta[,c(53:54)]),
+    TwoStepParam(
+        first=KmeansParam(centers=5000),
+        second=NNGraphParam(k=5)
+    )
+)
+
+tmp <- data.frame(meta, cluster.sq = kgraph.clusters)
+
+
+meta$annotation.defined.clusters <- meta$consensus.major
+meta$annotation.defined.clusters <- ifelse(meta$annotation.defined.clusters == "T_cell", paste0("T_cell, ", meta$functional.cluster), meta$annotation.defined.clusters)
+meta$annotation.defined.clusters <- ifelse(meta$annotation.defined.clusters == "Monocytes", meta$DICE.pruned.labels, meta$annotation.defined.clusters)
+
+
+
+ggplot(meta[sample(nrow(meta), 100000),], aes(x= UMAP_1, y = UMAP_2, color = annotation.defined.clusters))+ 
+    geom_point(size = 0.25) + 
+    theme(plot.title = element_blank()) + 
+    theme_void() 
+
+ggplot(tmp[sample(nrow(tmp), 100000),], aes(x= UMAP_1, y = UMAP_2, color = cluster.sq))+ 
+    geom_point(size = 0.25) + 
+    theme(plot.title = element_blank()) + 
+    theme_void() 
+```
+
