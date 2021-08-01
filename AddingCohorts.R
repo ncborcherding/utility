@@ -16,6 +16,7 @@ suppressPackageStartupMessages(library(SingleR))
 suppressPackageStartupMessages(library(celldex))
 suppressPackageStartupMessages(library(ProjecTILs))
 suppressPackageStartupMessages(library(scRepertoire))
+suppressPackageStartupMessages(library(UCell))
 
 ref <- load.reference.map("./annotation/ref_TILAtlas_mouse_v1.rds")
 HPCA <- HumanPrimaryCellAtlasData()
@@ -23,27 +24,29 @@ DICE <- DatabaseImmuneCellExpressionData()
 signature.list <- readRDS("./data/processedData/signature.list.rds")
 
 #Load most-up-to-date seurat object
-list <- readRDS(file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
+meta <- readRDS(file = "./data/ProcessedData/meta.rds")
 
 '%!in%' <- Negate('%in%')
 file_list <- list.files("./data/SequencingRuns")
-new.file_list <- file_list[file_list %!in% unique(list$orig.ident)]
+new.file_list <- file_list[file_list %!in% unique(meta$orig.ident)]
+new.file_list <- new.file_list[!grepl("Icon", new.file_list)]
 
-for (i in seq_along(new.file_list)){
-  tmp <-  Read10X(paste0("./data/SequencingRuns/", new.file_list[i]))
+#for (y in seq_along(new.file_list)){
+for (y in seq_along(new.file_list)){
+  tmp <-  Read10X(paste0("./data/SequencingRuns/", new.file_list[y]))
   
   ##Several data sets do not have the MT in front of the mitochondria genes
   mito <- c("ATP8", "ATP6", "CO1", "CO2", "CO3", "CYB", "ND1", "ND2", "ND3", "ND4L", "ND4", "ND5", "ND6", "RNR2", "TA", "TR", "TN", "TD", "TC", "TE", "TQ", "TG", "TH", "TI", "TL1", "TL2", "TK", "TM", "TF", "TP", "TS1", "TS2", "TT", "TW", "TY", "TV", "RNR1")
   
   x <- which(rownames(tmp) %in% mito)
   if (length(x) > 0) {
-    y <- rownames(tmp)[x] 
-    y<- paste0("MT-", y)
-    rownames(tmp)[x] <- y
+    z <- rownames(tmp)[x] 
+    z<- paste0("MT-", z)
+    rownames(tmp)[x] <- z
   }
   tmp <- CreateSeuratObject(counts = tmp)
   tmp <- subset(tmp, subset = nFeature_RNA > 100) #added filter to remove 0s and too sparse cells
-  tmp  <- RenameCells(object = tmp , new.names = paste0(new.file_list[i], "_", rownames(tmp[[]])))
+  tmp  <- RenameCells(object = tmp , new.names = paste0(new.file_list[y], "_", rownames(tmp[[]])))
   
   tmp[["mito.genes"]] <- PercentageFeatureSet(tmp, pattern = "^MT-")
   
@@ -51,7 +54,7 @@ for (i in seq_along(new.file_list)){
   p2 <- VlnPlot(object = tmp, features = c("nFeature_RNA")) + theme(legend.position = "none")
   p3 <- VlnPlot(object = tmp, features = c("mito.genes")) + theme(legend.position = "none")
   
-  pdf(paste0("./qc/", new.file_list[i], ".pdf"), height = 8, width=12)
+  pdf(paste0("./qc/", new.file_list[y], ".pdf"), height = 8, width=12)
   grid.arrange(p1, p2, p3, ncol = 3)
   dev.off()
   
@@ -68,7 +71,7 @@ for (i in seq_along(new.file_list)){
   ############################################
   sce <- as.SingleCellExperiment(tmp)
   sce <- scDblFinder(sce, BPPARAM=MulticoreParam(3))
-  doublets <- data.frame(db.weight.score = sce$scDblFinder.weighted, db.ratio = sce$scDblFinder.ratio, 
+  doublets <- data.frame(db.weight.score = sce$scDblFinder.score, db.ratio = sce$scDblFinder.weighted, 
                          db.class = sce$scDblFinder.class, db.score = sce$scDblFinder.score)
   rownames(doublets) <- rownames(sce@colData)
   tmp <- AddMetaData(tmp, doublets)
@@ -97,9 +100,9 @@ for (i in seq_along(new.file_list)){
   tmp.2 <- tmp.2[tabulate(summary(tmp.2)$i) != 0, , drop = FALSE]
   tmp.2 <- as.matrix(tmp.2)
   com.res1 <- SingleR(tmp.2, ref=HPCA, labels=HPCA$label.fine, assay.type.test=1)
-  saveRDS(com.res1, file = paste0("./annotation/singler/",  new.file_list[i], "_HPCA.singler_output.rds"))
+  saveRDS(com.res1, file = paste0("./annotation/singler/",  new.file_list[y], "_HPCA.singler_output.rds"))
   com.res2 <- SingleR(tmp.2, ref=DICE, labels=DICE$label.fine, assay.type.test=1)
-  saveRDS(com.res2, file = paste0("./annotation/singler/",  new.file_list[i], "_DICE.singler_output.rds"))
+  saveRDS(com.res2, file = paste0("./annotation/singler/",  new.file_list[y], "_DICE.singler_output.rds"))
   rm(tmp.2)
 
   df <- data.frame("HPCA.first.labels" = com.res1$first.labels, "HPCA.labels" = com.res1$labels, "HPCA.pruned.labels" = com.res1$pruned.labels, 
@@ -113,7 +116,7 @@ for (i in seq_along(new.file_list)){
   meta <- query.projected[[c("functional.cluster", "functional.cluster.conf")]]
   rownames(meta ) <- stringr::str_remove(rownames(meta), "Q_")
   tmp <- AddMetaData(tmp, meta)
-  saveRDS(meta, file = paste0("./annotation/projectil/",  new.file_list[i],  "_output.rds"))
+  saveRDS(meta, file = paste0("./annotation/projectil/",  new.file_list[y],  "_output.rds"))
   rm(query.projected)
   
   #####
@@ -122,6 +125,8 @@ for (i in seq_along(new.file_list)){
   consensus.df <- data.frame(DICE = stringr::str_split(tmp[[]]$DICE.pruned.labels, ",", simplify = TRUE)[,1], 
                              HPCA = stringr::str_split(tmp[[]]$HPCA.pruned.labels, ":", simplify = TRUE)[,1], 
                              PTIL = tmp[[]]$functional.cluster)
+  
+  
   consensus.df$DICE<- gsub(" ", "_", consensus.df$DICE)
   consensus.df$HPCA<- paste0(consensus.df$HPCA, "s")
   
@@ -129,17 +134,17 @@ for (i in seq_along(new.file_list)){
   consensus.df$PTIL <- ifelse(!is.na(consensus.df$PTIL), "T_cells", NA)
   consensus.major <- NULL
   for (i in 1:nrow(consensus.df)) {
-    T.length <- length(which(consensus.df[i,] %in% "T_cell"))
+    T.length <- length(which(consensus.df[i,] %in% "T_cells"))
     
     if (T.length >= 2) {
       consensus.major[i] <- "T_cell"
     } else {
       cellType <- unlist(consensus.df[i,])
-      if (length(which(is.na(cellType))) == 3 | length(which(is.na(cellType))) == 2) {
+      if (length(which(is.na(cellType))) == 3) {
         consensus.major[i] <- "no.annotation"
         next()
       }
-      if (cellType[1] == cellType[2] & is.na(cellType[3])) {
+      if (cellType[1] == cellType[2] & is.na(cellType[3]) | length(which(is.na(cellType))) == 2) {
         consensus.major[i] <- cellType[1]
       } else {
         consensus.major[i] <- "mixed.annotation"
@@ -158,10 +163,13 @@ for (i in seq_along(new.file_list)){
   for (i in 1:nrow(consensus.df)) {
     CD8.length <- length(which(grepl("CD8", consensus.df[i,])))
     CD4.length <- length(which(grepl("CD4", consensus.df[i,])))
+    Treg.length <- length(which(grepl("Treg|TREG", consensus.df[i,])))
     if (CD8.length >= 2){
       consensus.Tcell[i] <- "CD8"
     } else if (CD4.length >= 2) {
       consensus.Tcell[i] <- "CD4"
+    } else if (Treg.length >= 2) {
+      consensus.Tcell[i] <- "Treg"
     } else {
       consensus.Tcell[i] <- NA
     }
@@ -172,16 +180,25 @@ for (i in seq_along(new.file_list)){
   tmp <- AddMetaData(tmp, consensus.major)
   tmp <- AddMetaData(tmp, consensus.Tcell)
   
+
   
-  
+  scores <- ScoreSignatures_UCell(tmp@assays$RNA@data, features=signature.list)
+  tmp <- AddMetaData(tmp, as.data.frame(scores))
     
-  list <- merge(x=list, y=tmp)
+  if (y == 1) {
+    list <- tmp
+  } else {
+    list <- merge(x=list, y=tmp)
+  }
   rm(tmp)
 }
+
+saveRDS(list, file = "tmp.rds")
 rm(ref)
 rm(HPCA)
 rm(DICE)
 rm(meta)
+
 
 list <- NormalizeData(list, verbose = FALSE, assay = "RNA")
 list <- FindVariableFeatures(list, selection.method = "vst", 
@@ -318,14 +335,7 @@ for (i in seq_along(marker_list)) {
 #sequencing.
 
 
-library(UCell)
 
-
-scores <- ScoreSignatures_UCell(list@assays$RNA@data, features=signature.list)
-saveRDS(scores, file = "./data/processedData/signature.enrichment.rds")
-
-list <- AddMetaData(list, as.data.frame(scores))
-saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
 
 ##############################################
 #Loop Over the Enrichment Results
