@@ -31,7 +31,6 @@ file_list <- list.files("./data/SequencingRuns")
 new.file_list <- file_list[file_list %!in% unique(meta$orig.ident)]
 new.file_list <- new.file_list[!grepl("Icon", new.file_list)]
 
-#for (y in seq_along(new.file_list)){
 for (y in seq_along(new.file_list)){
   tmp <-  Read10X(paste0("./data/SequencingRuns/", new.file_list[y]))
   
@@ -193,12 +192,65 @@ for (y in seq_along(new.file_list)){
   rm(tmp)
 }
 
-saveRDS(list, file = "tmp.rds")
+## Loading Contig Data and Sorting
+library(scRepertoire)
+
+######################################
+#iterate to make a list of contig csvs
+######################################
+
+
+names <- stringr::str_split(new.file_list, "/", simplify = T)[,1]
+contig.list <- NULL
+for (i in seq_along(new.file_list)){
+  contig.list[[i]] <-  read.csv(paste0("./data/SequencingRuns/", new.file_list[i], "/filtered_contig_annotations.csv"))
+}
+names(contig.list) <- names
+
+##################################################
+#Reducing the data to the individual barcode level
+##################################################
+combinedObject <- combineTCR(contig.list, samples = names, ID = rep("ID", length(contig.list)), filterMulti = TRUE, cells = "T-AB")
+
+############################
+#Refining the output a little
+#############################
+
+#Right now scRepertoire requires an ID variable to prevent issues with duplicate barcodes, this is not 
+#ideal, but such is life, here I am just removing the ID to match the seurat object barcodes
+#Yes I am the creator of scRepertoire, so this is really my own fault.
+for (x in seq_along(combinedObject)) {
+  combinedObject[[x]]$barcode <- stringr::str_remove_all(combinedObject[[x]]$barcode, "ID_")
+}
+
+names(combinedObject) <- stringr::str_remove_all(names(combinedObject), "_ID")
+
+##############################################################
+#Adding new variable "Patient" to calculate frequency by patient
+################################################################
+order.contigs <- names(combinedObject) #order of the names of the contigs
+reorder.directory <- match(order.contigs, directory$SampleLabel) #matching names of order with directory
+var <- directory$Sample[reorder.directory] #getting the patient order
+
+combinedObject <- addVariable(combinedObject, name = "Patient", variables = var)
+
+combinedObject_master <- readRDS("./data/processedData/CombinedTCR_object.rds")
+combinedObject <- c(combinedObject_master, combinedObject)
+saveRDS(combinedObject, file = "./data/processedData/CombinedTCR_object.rds")
+
+list <- combineExpression(combinedObject, list, groupBy = "Patient") #Here is where the patient column comes in
+
 rm(ref)
 rm(HPCA)
 rm(DICE)
 rm(meta)
+rm(combinedObject)
+rm(combinedObject_master)
+rm(contig.list)
 
+master <- readRDS("./data/processedData/filtered_seuratObjects_harmony.rds")
+list <- merge(DietSeurat(master), list)
+rm(master)
 
 list <- NormalizeData(list, verbose = FALSE, assay = "RNA")
 list <- FindVariableFeatures(list, selection.method = "vst", 
@@ -210,7 +262,6 @@ list <- RunPCA(object = list, npcs = 40, verbose = FALSE)
 #Adding the meta data 
 #######################
 
-
 cohortSummary <- table(list$Cohort, list$Type)
 write.csv(cohortSummary, file = "./summaryInfo/cohortSummaryTable.csv")
 
@@ -221,7 +272,7 @@ library(harmony)
 list <- RunHarmony(list, group.by.vars = c("Cohort", "Sample"), max.iter.harmony = 20)
 
 
-list <- RunUMAP(list, reduction = "harmony", dims = 1:20)
+list <- RunUMAP(list, reduction = "harmony", dims = 1:15)
 saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
 
 #Simplifying annotation
@@ -233,7 +284,7 @@ saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
 
 mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(list$Tissue)))
 
-DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)], group.by = "Tissue") + 
+DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "Tissue", reduction = "umap") + 
   scale_color_manual(values = mycolors) + 
   theme(plot.title = element_blank())
 ggsave("./UMAP/TumorType.pdf", height = 3.5, width = 4.5)
@@ -241,13 +292,13 @@ ggsave("./UMAP/TumorType.pdf", height = 3.5, width = 4.5)
 
 mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(list$Type)))
 
-DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)], group.by = "Type") + 
+DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "Type") + 
   scale_color_manual(values = mycolors) + 
   theme(plot.title = element_blank())
 ggsave("./UMAP/TissueType.pdf", height = 3.5, width = 4.25)
 
 mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(15)
-DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)], group.by = "db.class") + 
+DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "db.class") + 
   scale_color_manual(values = mycolors[c(1,3)]) + 
   theme(plot.title = element_blank())
 ggsave("./UMAP/scDoublet.pdf", height = 3.5, width = 4.5)
@@ -263,13 +314,13 @@ x <- sample(nrow(list[[]]), 20000)
 
 dir.create("./UMAP")
 
-DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)], group.by = "consensus.major") + 
+DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "consensus.major") + 
   scale_color_manual(values = mycolors) + 
   theme(plot.title = element_blank())
 ggsave("./UMAP/major.consensus.pdf", height = 3.5, width = 5.5)
 
-DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)], group.by = "consensus.Tcell") + 
-  scale_color_manual(values = mycolors[c(1,3)], na.value="grey") + 
+DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "consensus.Tcell") + 
+  scale_color_manual(values = mycolors[c(1,2,4)], na.value="grey") + 
   theme(plot.title = element_blank())
 ggsave("./UMAP/Tcell.consensus.pdf", height = 3.5, width = 4)
 
@@ -321,113 +372,73 @@ for (i in seq_along(marker_list)) {
 }
 
 
-#There are 20 gene sets I use as part of my manual annotation check (available in the
-#./data/processedData directory as signature.list.rds). They are derived from
-#[this](https://pubmed.ncbi.nlm.nih.gov/29961579/) publication. I use it as a baseline
-#for my annotations and as a last slightly different approach to looking at cell type or
-#possible phenotype using enrichment (this is different than using SingleR, ProjecTIL,
-#or canonical markers). There are several methods for enrichment analysis, I am
-#currently in the process of bringing them under one umbrella in the
-#[escape](https://github.com/ncborcherding/escape) R package. However, I wanted to
-#highlight work from Massimo Andreatta and Santiago Carmona - 
-#[UCell](https://github.com/carmonalab/UCell) because with one core, it is faster than
-#my original approach in escape and it is adapted to the issues with single-cell
-#sequencing.
-
-
-
 
 ##############################################
 #Loop Over the Enrichment Results
 ########################################
 
 set.seed(123)
-x <- sample(nrow(list[[]]), 20000)
+x <- sample(nrow(list[[]]), 40000)
 set.names <- paste0(names(signature.list), "_UCell")
 dir.create("./UMAP/GeneEnrichment")
 
 for (i in seq_along(set.names)) {
   FeaturePlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)], features =  set.names[i]) +
-    scale_color_gradientn(colors = colorblind_vector(13)) + 
+    scale_color_gradientn(colors = viridis::viridis_pal(option = "B")(13)) + 
     theme(plot.title = element_blank())
-  ggsave(paste0("./UMAP/GeneEnrichment/", set.names[i], ".pdf"), height = 3.5, width = 3.75)
+  ggsave(paste0("./UMAP/GeneEnrichment/", set.names[i], ".pdf"), height = 3.5, width = 4.25)
 }
 
 
 # Contig Annotation
 
-One issue with the data collection was the collation of TCR data from multiple sequencing runs of an [experiment](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE144469). I am including the code below for the sake of reproducibility, however, after isolating the individual TCR data, I manually deposited them into their respective directories.
+list$cloneType <- factor(list$cloneType, levels = c("Rare (0 < X <= 1e-04)", "Small (1e-04 < X <= 0.001)", 
+                                                    "Medium (0.001 < X <= 0.01)", "Large (0.01 < X <= 0.1)", 
+                                                    "Hyperexpanded (0.1 < X <= 1)"))
 
-data <- read.csv("./data/processedData/GSE144469_TCR_filtered_contig_annotations_all.csv")
-data <- data[,-1]
-data$sample <- stringr::str_split(data$barcode, "-", simplify = TRUE)[,2]
-data$barcode<- paste0(stringr::str_split(data$barcode, "-", simplify = TRUE)[,1], "-1")
+#Going to look at 100,000 cells in the UMAP just to better see distribution
 
-samples <- unique(data$sample)
-for (i in seq_along(samples)) {
-  tmp <- data[data$sample == samples[i],]
-  tmp <- tmp[,-19] #remove the sample label that was added
-  write.csv(tmp, paste0(samples[i], "_filtered_contig_annotations.csv"))
-}
-
-
-## Loading Contig Data and Sorting
-library(scRepertoire)
-
-######################################
-#iterate to make a list of contig csvs
-######################################
-
-file_list <- list.files("./data/SequencingRuns", pattern = "filtered_contig_annotations", recursive = TRUE)
-names <- stringr::str_split(file_list, "/", simplify = T)[,1]
-contig.list <- NULL
-for (i in seq_along(file_list)){
-  contig.list[[i]] <-  read.csv(paste0("./data/SequencingRuns/", file_list[i]))
-}
-names(contig.list) <- names
-
-##################################################
-#Reducing the data to the individual barcode level
-##################################################
-combinedObject <- combineTCR(contig.list, samples = names, ID = rep("ID", length(contig.list)), filterMulti = TRUE, cells = "T-AB")
-
-############################
-#Refining the output a little
-#############################
-
-#Right now scRepertoire requires an ID variable to prevent issues with duplicate barcodes, this is not 
-#ideal, but such is life, here I am just removing the ID to match the seurat object barcodes
-#Yes I am the creator of scRepertoire, so this is really my own fault.
-for (x in seq_along(combinedObject)) {
-  combinedObject[[x]]$barcode <- stringr::str_remove_all(combinedObject[[x]]$barcode, "ID_")
-}
-
-names(combinedObject) <- stringr::str_remove_all(names(combinedObject), "_ID")
-
-##############################################################
-#Adding new variable "Patient" to calculate frequency by patient
-################################################################
-order.contigs <- names(combinedObject) #order of the names of the contigs
-reorder.directory <- match(order.contigs, directory$SampleLabel) #matching names of order with directory
-var <- directory$Sample[reorder.directory] #getting the patient order
-
-combinedObject <- addVariable(combinedObject, name = "Patient", variables = var)
-
-
-saveRDS(combinedObject, file = "./data/processedData/CombinedTCR_object.rds")
-
-combinedObject <- readRDS("./data/processedData/CombinedTCR_object.rds")
-
-list <- combineExpression(combinedObject, list, groupBy = "Patient") #Here is where the patient column comes in
-
-list$cloneType <- factor(list$cloneType, levels = c("Rare (0 < X <= 1e-04)", "Small (1e-04 < X <= 0.001)", "Medium (0.001 < X <= 0.01)", "Large (0.01 < X <= 0.1)", "Hyperexpanded (0.1 < X <= 1)"))
-
-#Going to look at 80,000 cells in the UMAP just to better see distribution
-
-DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 80000)], group.by  =  "cloneType") +
-  scale_color_manual(values = colorblind_vector(5), na.value="grey") + 
+DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 100000)], group.by  =  "cloneType") +
+  scale_color_manual(values = viridis::viridis_pal(option = "B")(5), na.value="grey") + 
   theme(plot.title = element_blank())
-ggsave("./UMAP/ClonotypeExpansion.pdf", height = 3.5, width = 6)
+ggsave("./UMAP/ClonotypeExpansion.pdf", height = 3.5, width = 6.5)
+
+# Banner Image Summary
+
+library(patchwork)
+
+set.seed(123)
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(list$Tissue)))
+plot1 <- DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "Tissue") + 
+  theme_void() +
+  scale_color_manual(values = mycolors) + 
+  theme(plot.title = element_blank(), 
+        legend.text=element_text(size=6)) 
+
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(list$DICE.pruned.labels)))
+
+plot2 <- DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "DICE.pruned.labels") + 
+  theme_void()+
+  scale_color_manual(values = mycolors) + 
+  theme(plot.title = element_blank(), 
+        legend.text=element_text(size=6)) 
+
+breakdown <- as.data.frame(table(list$Type, list$Tissue))
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(8)
+plot3 <- ggplot(breakdown, aes(x=Var2, y = Freq, fill = Var1)) + 
+  geom_bar(stat = "identity", position = "fill") + 
+  scale_x_discrete(limits = rev(levels(breakdown$Var2))) +
+  ylab("Proportion of Cells") + 
+  labs(fill='Tissues') +
+  scale_fill_manual(values = mycolors) + 
+  theme_classic() + 
+  coord_flip() + 
+  theme(axis.title.y = element_blank(), 
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(), legend.text=element_text(size=6))
+
+plot1 + plot2 + plot3 + plot_layout(widths = c(3, 3, 1))
+ggsave("./UMAP/banner.jpg", height = 4, width = 10, dpi = 600)
 
 
 saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
