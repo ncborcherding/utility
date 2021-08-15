@@ -1,3 +1,8 @@
+##########################
+#Changes to Version 0.0.3
+#########################
+Data Set changes
+* Removed GSE144469 - derived from colon pinch biopsies, not colorectal cancer (error in wen scrapper)
 
 
 ##########################
@@ -14,7 +19,8 @@ Processing Data Workflow Changes
 * Added filter for nFeature > 100 to initial filter steps
 * Fixed issue with DICE annotation (not save correctly)
 * Modified consensus annotation to accommodate DICE change
-* UMAP based on 15 Harmony dimensions instead of 10
+* UMAP based on 15 Harmony dimensions instead of 20
+
 
 Other Code Changes
-* Initial script for cohort addition (Adding Cohort) - has been run through once
+* Initial script for cohort addition (Adding Cohort) - has been run through otwic

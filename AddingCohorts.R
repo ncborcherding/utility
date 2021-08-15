@@ -426,7 +426,7 @@ plot2 <- DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)]
 breakdown <- as.data.frame(table(list$Type, list$Tissue))
 mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(8)
 plot3 <- ggplot(breakdown, aes(x=Var2, y = Freq, fill = Var1)) + 
-  geom_bar(stat = "identity", position = "fill") + 
+  geom_bar(stat = "identity", position = "fill", stroke = 0.25) + 
   scale_x_discrete(limits = rev(levels(breakdown$Var2))) +
   ylab("Proportion of Cells") + 
   labs(fill='Tissues') +
