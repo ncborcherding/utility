@@ -383,7 +383,7 @@ set.names <- paste0(names(signature.list), "_UCell")
 dir.create("./UMAP/GeneEnrichment")
 
 for (i in seq_along(set.names)) {
-  FeaturePlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 20000)], features =  set.names[i]) +
+  FeaturePlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], features =  set.names[i]) +
     scale_color_gradientn(colors = viridis::viridis_pal(option = "B")(13)) + 
     theme(plot.title = element_blank())
   ggsave(paste0("./UMAP/GeneEnrichment/", set.names[i], ".pdf"), height = 3.5, width = 4.25)
@@ -426,7 +426,7 @@ plot2 <- DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)]
 breakdown <- as.data.frame(table(list$Type, list$Tissue))
 mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(8)
 plot3 <- ggplot(breakdown, aes(x=Var2, y = Freq, fill = Var1)) + 
-  geom_bar(stat = "identity", position = "fill", stroke = 0.25) + 
+  geom_bar(stat = "identity", position = "fill", color = "black") + 
   scale_x_discrete(limits = rev(levels(breakdown$Var2))) +
   ylab("Proportion of Cells") + 
   labs(fill='Tissues') +
@@ -442,3 +442,17 @@ ggsave("./UMAP/banner.jpg", height = 4, width = 10, dpi = 600)
 
 
 saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
+
+meta <- data.frame(list[[]], list@reductions$umap@cell.embeddings)
+saveRDS(meta, file = "./data/processedData/meta.rds")
+
+#########################################
+#Add loom conversion for Scanpy support
+########################################
+
+library(LoomExperiment)
+list <- as.SingleCellExperiment(list)
+list <- SingleCellLoomExperiment(list)
+export(list, "./data/ProcessedData/filtered_seuratObjects_harmony.loom")
+
+
