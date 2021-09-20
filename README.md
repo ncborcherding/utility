@@ -28,7 +28,7 @@ Here is the current list of data sources, the number of cells that passed filter
 | GSE162500   | 23401 | 3761  | 0    | 0   | 0      | 14644 | Lung        | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/33514641/) |
 | GSE176021   | 132673 | 0    | 71062| 32011 |128387 | 436608 | Lung      | 8/1/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/34290408/) |
 | GSE180268   | 0     | 0     | 29699| 0   | 0       | 23215 | HNSCC      | 9/21/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/34471285/) |
-| PRJNA705465 | 30340 | 0     | 3505 | 0   | 15113   | 97966 | Renal      | 9/21/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/34290408/) |
+| PRJNA705465 | 30340 | 0     | 3505 | 0   | 15113   | 97966 | Renal      | 9/21/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/33861994/) |
 
 *****
 ### Methods
@@ -42,7 +42,7 @@ Automatic annotation was performed using the singler (v1.4.1) R package ([citati
 
 #### Addition of TCR data
 
-The filtered contig annotation T cell receptor (TCR) data for available sequencing runs were loaded into the R global environment. Individual contigs were combined using the combineTCR() function of scRepertoire (v1.3.2) R Package ([citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)). Clonotypes were assigned to barcodes and were multiple duplicate chains for individual cells were filtered to select for the top expressing contig by read count. The clonotype data was then added to the Seurat Object with proportion across individual patients being used to calculate frequency.
+The filtered contig annotation T cell receptor (TCR) data for available sequencing runs were loaded into the R global environment. Individual contigs were combined using the combineTCR() function of scRepertoire (v1.3.4) R Package ([citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)). Clonotypes were assigned to barcodes and were multiple duplicate chains for individual cells were filtered to select for the top expressing contig by read count. The clonotype data was then added to the Seurat Object with proportion across individual patients being used to calculate frequency.
 
 #### Session Info
 
@@ -88,7 +88,7 @@ methods section (above) and please cite the appropriate manuscripts of the softw
 * singler v1.4.1 - [citation](https://pubmed.ncbi.nlm.nih.gov/30643263/)  
 * ProjecTILs v0.4.1 - [citation](https://pubmed.ncbi.nlm.nih.gov/34017005/)
 * UCell v1.0.0 - [citation](https://www.sciencedirect.com/science/article/pii/S2001037021002816?via%3Dihub)  
-* scRepertoire v1.3.2 - [citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)  
+* scRepertoire v1.3.4 - [citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)  
 
 #### Itemized List of Reference Data Used
 * Human Primary Cell Atlas (HPCA) - [citation](https://pubmed.ncbi.nlm.nih.gov/24053356/)  
