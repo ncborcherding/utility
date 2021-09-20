@@ -2,6 +2,17 @@
 #Changes to Version 0.0.3
 #########################
 Data Set changes
+* Re-annotated the different patient designations, some issues in previous version.
+
+Processing Data Workflow Changes
+* UMAP based on 20 Harmony dimensions instead of 15
+* Upgraded to scRepertoire 1.3.4 and re-did the adding of the TCR data. 
+
+
+##########################
+#Changes to Version 0.0.3
+#########################
+Data Set changes
 * Removed GSE144469 - derived from colon pinch biopsies, not colorectal cancer (error in wen scrapper)
 
 
@@ -23,4 +34,4 @@ Processing Data Workflow Changes
 
 
 Other Code Changes
-* Initial script for cohort addition (Adding Cohort) - has been run through otwic
+* Initial script for cohort addition (Adding Cohort) - has been run through twice
