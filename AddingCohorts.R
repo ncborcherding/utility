@@ -31,7 +31,7 @@ file_list <- list.files("./data/SequencingRuns")
 new.file_list <- file_list[file_list %!in% unique(meta$orig.ident)]
 new.file_list <- new.file_list[!grepl("Icon", new.file_list)]
 
-for (y in seq_along(new.file_list)){
+for (y in 41:54){
   tmp <-  Read10X(paste0("./data/SequencingRuns/", new.file_list[y]))
   
   ##Several data sets do not have the MT in front of the mitochondria genes
@@ -192,6 +192,8 @@ for (y in seq_along(new.file_list)){
   rm(tmp)
 }
 
+saveRDS(list, "tmp.rds")
+
 ## Loading Contig Data and Sorting
 library(scRepertoire)
 
@@ -249,56 +251,56 @@ rm(combinedObject_master)
 rm(contig.list)
 
 master <- readRDS("./data/processedData/filtered_seuratObjects_harmony.rds")
-list <- merge(DietSeurat(master), list)
-rm(master)
+master <- merge(DietSeurat(master), list)
+rm(list)
 
-list <- NormalizeData(list, verbose = FALSE, assay = "RNA")
-list <- FindVariableFeatures(list, selection.method = "vst", 
+master <- NormalizeData(master, verbose = FALSE, assay = "RNA")
+master <- FindVariableFeatures(master, selection.method = "vst", 
                              nfeatures = 2000, verbose = FALSE, assay = "RNA")
-list <- ScaleData(object = list, verbose = FALSE)
-list <- RunPCA(object = list, npcs = 40, verbose = FALSE)
+master <- ScaleData(object = master, verbose = FALSE)
+master <- RunPCA(object = master, npcs = 40, verbose = FALSE)
 
 #######################
 #Adding the meta data 
 #######################
 
-cohortSummary <- table(list$Cohort, list$Type)
+cohortSummary <- table(master$Cohort, master$Type)
 write.csv(cohortSummary, file = "./summaryInfo/cohortSummaryTable.csv")
 
 ####################################################
 #Correcting for Cohort and Sample and getting UMAP
 ###################################################
 library(harmony)
-list <- RunHarmony(list, group.by.vars = c("Cohort", "Sample"), max.iter.harmony = 20)
+master <- RunHarmony(master, group.by.vars = c("Cohort", "Sample"), max.iter.harmony = 20)
 
 
-list <- RunUMAP(list, reduction = "harmony", dims = 1:15)
-saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
+master <- RunUMAP(master, reduction = "harmony", dims = 1:15)
+saveRDS(master, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
 
 #Simplifying annotation
-table <- table(list[["consensus.major"]])
+table <- table(master[["consensus.major"]])
 table <- table[table > 100]
-list$consensus.major <- ifelse(list$consensus.major %in% names(table), list$consensus.major, "other")
-list$consensus.major <- ifelse(list$consensus.major == "no.annotation", "other", list$consensus.major)
-saveRDS(list, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
+master$consensus.major <- ifelse(master$consensus.major %in% names(table), master$consensus.major, "other")
+master$consensus.major <- ifelse(master$consensus.major == "no.annotation", "other", master$consensus.major)
+saveRDS(master, file = "./data/ProcessedData/filtered_seuratObjects_harmony.rds")
 
-mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(list$Tissue)))
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(master$Tissue)))
 
-DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "Tissue", reduction = "umap") + 
+DimPlot(master, cells = rownames(master[[]])[sample(nrow(master[[]]), 40000)], group.by = "Tissue", reduction = "umap") + 
   scale_color_manual(values = mycolors) + 
   theme(plot.title = element_blank())
 ggsave("./UMAP/TumorType.pdf", height = 3.5, width = 4.5)
 
 
-mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(list$Type)))
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(master$Type)))
 
-DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "Type") + 
+DimPlot(master, cells = rownames(master[[]])[sample(nrow(master[[]]), 40000)], group.by = "Type") + 
   scale_color_manual(values = mycolors) + 
   theme(plot.title = element_blank())
 ggsave("./UMAP/TissueType.pdf", height = 3.5, width = 4.25)
 
 mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(15)
-DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "db.class") + 
+DimPlot(master, cells = rownames(master[[]])[sample(nrow(master[[]]), 40000)], group.by = "db.class") + 
   scale_color_manual(values = mycolors[c(1,3)]) + 
   theme(plot.title = element_blank())
 ggsave("./UMAP/scDoublet.pdf", height = 3.5, width = 4.5)
@@ -307,19 +309,19 @@ ggsave("./UMAP/scDoublet.pdf", height = 3.5, width = 4.5)
 #Examining the annotations using the sample function to reduce load - graphing 20,000 cell instead of 500,000+
 
 library(RColorBrewer)
-mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(list$consensus.major)))
+mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(master$consensus.major)))
 
 set.seed(123)
-x <- sample(nrow(list[[]]), 20000)
+x <- sample(nrow(master[[]]), 20000)
 
 dir.create("./UMAP")
 
-DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "consensus.major") + 
+DimPlot(master, cells = rownames(master[[]])[sample(nrow(master[[]]), 40000)], group.by = "consensus.major") + 
   scale_color_manual(values = mycolors) + 
   theme(plot.title = element_blank())
 ggsave("./UMAP/major.consensus.pdf", height = 3.5, width = 5.5)
 
-DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "consensus.Tcell") + 
+DimPlot(master, cells = rownames(master[[]])[sample(nrow(master[[]]), 40000)], group.by = "consensus.Tcell") + 
   scale_color_manual(values = mycolors[c(1,2,4)], na.value="grey") + 
   theme(plot.title = element_blank())
 ggsave("./UMAP/Tcell.consensus.pdf", height = 3.5, width = 4)
