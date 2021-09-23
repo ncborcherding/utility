@@ -13,7 +13,7 @@ Processing Data Workflow Changes
 #Changes to Version 0.0.3
 #########################
 Data Set changes
-* Removed GSE144469 - derived from colon pinch biopsies, not colorectal cancer (error in wen scrapper)
+* Removed GSE144469 - derived from colon pinch biopsies, not colorectal cancer (error in web scrapper)
 
 
 ##########################
