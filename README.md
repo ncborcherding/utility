@@ -86,16 +86,15 @@ each data set summarized above or can be found in the [summary table](https://gi
 methods section (above) and please cite the appropriate manuscripts of the software or references that were used.
 
 #### Itemized List of the Software Used
-* Seurat v4.0.3 - [citation](https://pubmed.ncbi.nlm.nih.gov/34062119/)  
+* Seurat v4.1.p - [citation](https://pubmed.ncbi.nlm.nih.gov/34062119/)  
 * singler v1.4.1 - [citation](https://pubmed.ncbi.nlm.nih.gov/30643263/)  
-* ProjecTILs v0.4.1 - [citation](https://pubmed.ncbi.nlm.nih.gov/34017005/)
+* ProjecTILs v2.0.3 - [citation](https://pubmed.ncbi.nlm.nih.gov/34017005/)
 * UCell v1.0.0 - [citation](https://www.sciencedirect.com/science/article/pii/S2001037021002816?via%3Dihub)  
 * scRepertoire v1.3.4 - [citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)  
 
 #### Itemized List of Reference Data Used
 * Human Primary Cell Atlas (HPCA) - [citation](https://pubmed.ncbi.nlm.nih.gov/24053356/)  
-* Database Immune Cell Expression (DICE) - [citation](https://pubmed.ncbi.nlm.nih.gov/30449622/)  
-* Immune-related Gene Sets - [citation](https://pubmed.ncbi.nlm.nih.gov/29961579/)
+* Monaco Data Set (DICE) - [citation](https://pubmed.ncbi.nlm.nih.gov/30726743/)  
 
 *****
 ### Future Directions
