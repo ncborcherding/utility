@@ -52,29 +52,11 @@ Session Info for the intial data processing and analysis can be found [here](htt
 *****
 ### Getting Data
 
-Due to the size of the files, the processed 10x Genomics outputs and processed data outputs from the analytical pipeline are available [here](https://zenodo.org/record/4995299).
+Due to the size of the files, the  processed data outputs and code are available [here](https://zenodo.org/record/4995299).
 
 #### Most up-to-date version
 
-I am working through a number of other sequencing experiments, in order to provide the most up-to-date version (as I work), the following [link](https://drive.google.com/drive/folders/1Y8fGXIRxIfEk1BiQ4X2MC0CTznkXf_AW?usp=sharing) can be used.
-
-******
-### Working with the Data
-
-There is no assigned clusters across the single-cells. In order to incorporate additional data sets for use, we opted not to cluster. Clustering can easily be performed using the code below:
-
-```
-seuratObject <- FindNeighbors(seuratObject, reduction = "harmony") 
-seuratObject <- FindClusters(seuratObject)
-```
-
-If subsetting the data, either by cell type or other variables in the meta data, re-intergration using Harmony will be required:
-
-```
-subset.1 <- subset(seuratObject, "Consensus.Major" == "T_cell")
-subset.1 <- RunHarmony(subset.1, group.by.vars = c("Cohort", "Sample"), max.iter.harmony = 20)
-subset.1 <- RunUMAP(subset.1, reduction = "harmony", dims = 1:20)
-```
+I am working through a number of other sequencing experiments, in order to provide the most up-to-date version (as I work), the following [link](https://drive.google.com/drive/folders/1Y8fGXIRxIfEk1BiQ4X2MC0CTznkXf_AW?usp=sharing). This folder also has access to the processed outputs from the 10x Genomics Cell Ranger pipeline. 
 
 *****
 ### Citations
