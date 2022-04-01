@@ -1,0 +1,36 @@
+---
+title: "rds to H5ad conversion"
+author: 
+- name: Nick Borcherding
+  email: ncborch@gmail.com
+  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
+date: "March 30th, 2022"
+output:
+  BiocStyle::html_document:
+    toc_float: true
+---
+
+```{r, echo=FALSE, results="hide", message=FALSE}
+knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
+library(BiocStyle)
+```
+
+# Converting Formats
+
+Per requests from users, the individual sequencing run output will be converted from .rds to .h5ad to facilitate working on the data in python. 
+
+```{r}
+library(reticulate)
+library(SeuratDisk)
+use_condaenv("r-reticulate")
+files <- list.files("./data/processedData/individualSeurat/rds")
+names <- stringr::str_remove_all(files, ".rds")
+
+for(i in seq_along(files)) {
+  tmp <- readRDS(paste0("./data/processedData/individualSeurat/rds/", files[i]))
+  SaveH5Seurat(tmp, filename = paste0("./data/processedData/individualSeurat/h5ad/", names[i], ".h5Seurat"))
+  Convert(paste0("./data/processedData/individualSeurat/h5ad/", names[i], ".h5Seurat"), dest = "h5ad")
+  file.remove(paste0("./data/processedData/individualSeurat/h5ad/", names[i], ".h5Seurat"))
+}
+```
+

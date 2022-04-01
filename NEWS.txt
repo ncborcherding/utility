@@ -1,0 +1,49 @@
+##########################
+#Changes to Version 0.0.4
+#########################
+Data Set Changes
+* Intermediate R objects for all cells, only T cells, and TCRs will be saved in the /processedData folder
+* Began parsing of combined public data sets that do not have the CellRanger outputs, the pre-processed data will be stored in processedData/combinedDataSets
+* Added EGAS00001004809, GSE179994, GSE181061
+
+Processing Data Workflow Changes
+* Reprocessed all sequencing runs with updated pipeline under Processing_Utility.Rmd
+* Updated ProjecTIL version and incorporated the scGate package for filtering 
+
+##########################
+#Changes to Version 0.0.4
+#########################
+Data Set changes
+* Re-annotated the different patient designations, some issues in previous version.
+
+Processing Data Workflow Changes
+* UMAP based on 20 Harmony dimensions instead of 15
+* Upgraded to scRepertoire 1.3.4 and re-did the adding of the TCR data. 
+
+
+##########################
+#Changes to Version 0.0.3
+#########################
+Data Set changes
+* Removed GSE144469 - derived from colon pinch biopsies, not colorectal cancer (error in wen scrapper)
+
+
+##########################
+#Changes to Version 0.0.2
+#########################
+Administrative Changes
+* Added NEWS file
+* Removed intermediate "filtered_seuratObjects.rds" from code and stored
+* Added summaryInfo directory for session info, sample directory, cohort summary
+* Placed input/output of projectil and SingleR in new annotation folder
+* Updated Readme to include table and corresponding link changes
+
+Processing Data Workflow Changes
+* Added filter for nFeature > 100 to initial filter steps
+* Fixed issue with DICE annotation (not save correctly)
+* Modified consensus annotation to accommodate DICE change
+* UMAP based on 15 Harmony dimensions instead of 20
+
+
+Other Code Changes
+* Initial script for cohort addition (Adding Cohort) - has been run through twice

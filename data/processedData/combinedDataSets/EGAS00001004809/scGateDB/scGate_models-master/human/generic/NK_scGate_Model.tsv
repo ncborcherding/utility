@@ -1,0 +1,13 @@
+levels	use_as	name	signature
+level1	positive	Immune	
+level1	positive	Lymphoid	
+level1	negative	Epithelial	
+level1	negative	Stromal	
+level2	positive	Lymphoid	
+level2	positive	NK	
+level2	negative	Myeloid	
+level2	negative	MoMacDC	
+level2	negative	Neutrophils	
+level3	positive	NK	
+level3	negative	Bcell	
+level3	negative	Plasma_cell	
