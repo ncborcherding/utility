@@ -15,6 +15,7 @@ Tissue	Cancer Type
 Sample	Sample Identifier to span multiple sequencing runs
 Sorted	Sorting scheme for sampple
 HPCA.labels	SingleR output using HPCA reference
+HPCA.first.labels	SingleR output using HPCA reference
 HPCA.pruned.labels	SingleR output using HPCA reference
 Monaco.labels	SingleR output using Monaco reference
 Monaco.pruned.labels	SingleR output using Monaco reference
