@@ -14,36 +14,12 @@ Type	Where the Immune Cells Were Isolated from
 Tissue	Cancer Type
 Sample	Sample Identifier to span multiple sequencing runs
 Sorted	Sorting scheme for sampple
-HPCA.first.labels	SingleR output using HPCA reference
 HPCA.labels	SingleR output using HPCA reference
 HPCA.pruned.labels	SingleR output using HPCA reference
-DICE.first.labels	SingleR output using DICEreference
-DICE.labels	SingleR output using DICEreference
-DICE.pruned.labels	SingleR output using DICEreference
+Monaco.labels	SingleR output using Monaco reference
+Monaco.pruned.labels	SingleR output using Monaco reference
 functional.cluster	ProjecTIL output assignment
 functional.cluster.conf	ProjecTIL output proportion of nearest neighbot
-consensus.major	Major Cell Type Assignment
-consensus.Tcell	CD4 or CD8 designation
-Treg_UCell	Ucell Enrichment results
-CD8_Activation_UCell	Ucell Enrichment results
-Antinflammatory_UCell	Ucell Enrichment results
-Anergy_UCell	Ucell Enrichment results
-Proinflammatory_UCell	Ucell Enrichment results
-Lipid_mediators_UCell	Ucell Enrichment results
-Glycolysis_UCell	Ucell Enrichment results
-TCA_cycle_UCell	Ucell Enrichment results
-PPS_UCell	Ucell Enrichment results
-Glycogen_Metabolism_UCell	Ucell Enrichment results
-Glucose_Deprivation_UCell	Ucell Enrichment results
-M1.Macro_UCell	Ucell Enrichment results
-M2.Macro_UCell	Ucell Enrichment results
-Cytolytic_UCell	Ucell Enrichment results
-T1_Interferon_UCell	Ucell Enrichment results
-T2_Interferon_UCell	Ucell Enrichment results
-Hypoxia_UCell	Ucell Enrichment results
-T_Cell_Terminal_Differentiation_UCell	Ucell Enrichment results
-G1S_UCell	Ucell Enrichment results
-G2M_UCell	Ucell Enrichment results
 barcode	Duplicate Cell Barcode
 CTgene	Clonotype by TCRA_TCRB genes
 CTnt	Clonotype by TCRA_TCRB cdr3 nucleotide sequences
