@@ -1,0 +1,21 @@
+levels	use_as	name	signature
+level1	positive	Immune	
+level1	positive	Myeloid	
+level1	positive	Macrophage	
+level1	positive	pDC	
+level1	positive	MoMacDC	
+level1	negative	Epithelial	
+level1	negative	Stromal	
+level1	negative	Erythrocyte	
+level2	positive	Macrophage	
+level2	positive	Myeloid	
+level2	positive	MoMacDC	
+level2	negative	Lymphoid	
+level2	negative	Tcell	
+level2	negative	Bcell	
+level2	negative	Plasma_cell	
+level2	negative	PanBcell	
+level3	positive	Macrophage	
+level3	positive	Myeloid	
+level3	positive	MoMacDC	
+level3	negative	Neutrophils	CSF3R;FCGR3B;ANXA2-

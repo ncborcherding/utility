@@ -1,0 +1,30 @@
+Columns	Summary
+orig.ident	Combination of tumor and tissue type as unique identifier
+nCount_RNA	summary of counts
+nFeature_RNA	summary of features
+mito.genes	percent of mitochondiral genes
+db.weight.score	scDblFinder output
+db.ratio	scDblFinder output
+db.class	scDblFinder output
+db.score	scDblFinder output
+SampleID	Original names of samples by submission
+GEO_RNA	RNA Acession ID
+Cohort	Cohort Accession ID
+Type	Where the Immune Cells Were Isolated from
+Tissue	Cancer Type
+Sample	Sample Identifier to span multiple sequencing runs
+Sorted	Sorting scheme for sampple
+HPCA.labels	SingleR output using HPCA reference
+HPCA.first.labels	SingleR output using HPCA reference
+HPCA.pruned.labels	SingleR output using HPCA reference
+Monaco.labels	SingleR output using Monaco reference
+Monaco.pruned.labels	SingleR output using Monaco reference
+functional.cluster	ProjecTIL output assignment
+functional.cluster.conf	ProjecTIL output proportion of nearest neighbot
+barcode	Duplicate Cell Barcode
+CTgene	Clonotype by TCRA_TCRB genes
+CTnt	Clonotype by TCRA_TCRB cdr3 nucleotide sequences
+CTaa	Clonotype by TCRA_TCRB cdr3 amico acid sequences
+CTstrict	Clonotype by TCRA_TCRB genes and cdr3 nucleotide sequences
+Frequency	Proprotion of total repertoire occupised by specific clone
+cloneType	Clonotype Frequency grouping

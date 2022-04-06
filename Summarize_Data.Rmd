@@ -1,0 +1,72 @@
+---
+title: Summarizing the contents of utility.
+author: 
+- name: Nick Borcherding
+  email: ncborch@gmail.com
+  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
+date: "March 30th, 2022"
+output:
+  BiocStyle::html_document:
+    toc_float: true
+
+---
+
+```{r, echo=FALSE, results="hide", message=FALSE}
+knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
+library(BiocStyle)
+```
+
+
+```{r setup, include=FALSE}
+suppressPackageStartupMessages(library(Seurat))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(viridis))
+suppressPackageStartupMessages(library(Matrix))
+suppressPackageStartupMessages(library(stringr))
+```
+
+# Loading and Processing the Data
+
+## Load, filter and combine Data
+```{r include=FALSE}
+"%!in%" <- Negate("%in%")
+full.data <- unique(list.files("./data/processedData/individualSeurat", pattern = ".rds"))
+tcell.data <- unique(list.files("./data/processedData/individualTcells", pattern = ".rds"))
+pt.directory <- readxl::read_xlsx("./summaryInfo/sample.directory.xlsx")
+
+full.data.summary <- matrix(ncol = length(unique(pt.directory$Type)), nrow = length(unique(pt.directory$Cohort)), 0)
+colnames(full.data.summary) <- unique(pt.directory$Type)
+rownames(full.data.summary) <- unique(pt.directory$Cohort)
+
+tumor.data.summary <- matrix(ncol = length(unique(pt.directory$Type)), nrow = length(unique(pt.directory$Tissue)), 0)
+colnames(tumor.data.summary) <- unique(pt.directory$Type)
+rownames(tumor.data.summary) <- unique(pt.directory$Tissue)
+
+tcell.tumor.data.summary <- matrix(ncol = length(unique(pt.directory$Type)), nrow = length(unique(pt.directory$Tissue)), 0)
+colnames(tcell.tumor.data.summary) <- unique(pt.directory$Type)
+rownames(tcell.tumor.data.summary) <- unique(pt.directory$Tissue)
+
+
+for (i in seq_along(full.data)){
+    tmp <- readRDS(paste0("./data/processedData/individualSeurat/", full.data[i]))
+    total.cells <- nrow(tmp[[]])
+    directory.tmp <- pt.directory[pt.directory$SampleLabel == str_remove(full.data[i], ".rds"),]
+    
+    full.data.summary[directory.tmp$Cohort, directory.tmp$Type] <- full.data.summary[directory.tmp$Cohort, directory.tmp$Type] + total.cells
+    tumor.data.summary[directory.tmp$Tissue, directory.tmp$Type] <- tumor.data.summary[directory.tmp$Tissue, directory.tmp$Type] + total.cells
+    
+    full.data.summary
+    if (full.data[i] %in% tcell.data) {
+      tcell.tmp <- readRDS(paste0("./data/processedData/individualTcells/", full.data[i]))
+      total.t.cells <- nrow(tcell.tmp[[]])
+      tcell.tumor.data.summary[directory.tmp$Tissue, directory.tmp$Type] <- tcell.tumor.data.summary[directory.tmp$Tissue, directory.tmp$Type] + total.t.cells
+      rm(tcell.tmp)
+    }
+    rm(tmp)
+}
+
+write.csv(full.data.summary, "./summaryInfo/cohortSummaryTable.csv")
+write.csv(tumor.data.summary, "./summaryInfo/tumorSummaryTable.csv")
+write.csv(tcell.tumor.data.summary, "./summaryInfo/TcellSummaryTable.csv")
+```
