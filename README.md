@@ -39,11 +39,11 @@ The filtered gene matrices output from Cell Ranger align function  from individu
 
 #### Annotation of Cells
 
-Automatic annotation was performed using the singler (v1.4.1) R package ([citation](https://pubmed.ncbi.nlm.nih.gov/30643263/)) with the HPCA ([citation](https://pubmed.ncbi.nlm.nih.gov/24053356/)) and DICE ([citation](https://pubmed.ncbi.nlm.nih.gov/30449622/)) data sets as references and the fine label discriminators. Individual sequencing runs were subsetted to run through the singleR algorithm in order to reduce memory demands. The output of all the singleR analyses were collated and appended to the meta data of the seurat object. Likewise, the ProjecTILs (v0.4.1) R Package ([citation](https://pubmed.ncbi.nlm.nih.gov/34017005/)) was used for automatic annotation as a partially orthogonal approach. Consensus annotation was derived from all 3 databases (HPCA, DICE, ProjecTILs) using a majority approach. No annotation designation was assigned to cells that returned NA for both singleR and ProjecTILs. 
+Automatic annotation was performed using the singler (v1.4.1) R package ([citation](https://pubmed.ncbi.nlm.nih.gov/30643263/)) with the HPCA ([citation](https://pubmed.ncbi.nlm.nih.gov/24053356/)) and DICE ([citation](https://pubmed.ncbi.nlm.nih.gov/30449622/)) data sets as references and the fine label discriminators. Individual sequencing runs were subsetted to run through the singleR algorithm in order to reduce memory demands. The output of all the singleR analyses were collated and appended to the meta data of the seurat object. Likewise, the ProjecTILs (v0.4.1) R Package ([citation](https://pubmed.ncbi.nlm.nih.gov/34017005/)) was used for automatic annotation as a partially orthogonal approach. Consensus annotation was derived from all 3 databases (HPCA, Monaco, ProjecTILs) using a majority approach. No annotation designation was assigned to cells that returned NA for both singleR and ProjecTILs. 
 
 #### Addition of TCR data
 
-The filtered contig annotation T cell receptor (TCR) data for available sequencing runs were loaded into the R global environment. Individual contigs were combined using the combineTCR() function of scRepertoire (v1.) R Package ([citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)). Clonotypes were assigned to barcodes and were multiple duplicate chains for individual cells were filtered to select for the top expressing contig by read count. The clonotype data was then added to the Seurat Object with proportion across individual patients being used to calculate frequency.
+The filtered contig annotation T cell receptor (TCR) data for available sequencing runs were loaded into the R global environment. Individual contigs were combined using the combineTCR() function of scRepertoire (v1.3.5) R Package ([citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)). Clonotypes were assigned to barcodes and were multiple duplicate chains for individual cells were filtered to select for the top expressing contig by read count. The clonotype data was then added to the Seurat Object with proportion across individual patients being used to calculate frequency.
 
 #### Session Info
 
@@ -56,7 +56,9 @@ Due to the size of the files, the  processed data outputs and code are available
 
 #### Most up-to-date version
 
-I am working through a number of other sequencing experiments, in order to provide the most up-to-date version (as I work), the following [link](https://drive.google.com/drive/folders/1Y8fGXIRxIfEk1BiQ4X2MC0CTznkXf_AW?usp=sharing). This folder also has access to the processed outputs from the 10x Genomics Cell Ranger pipeline. 
+#### Not a Static Resource 
+
+Although the initial cohort of data is deposited and accessible - new data and analyses are being added. Check out the [dev branch](https://github.com/ncborcherding/utility/tree/dev) for changes and I am working through a number of other sequencing experiments, in order to provide the most up-to-date version (as I work), the following [link](https://drive.google.com/drive/folders/1Y8fGXIRxIfEk1BiQ4X2MC0CTznkXf_AW?usp=sharing) can be used.
 
 *****
 ### Citations
