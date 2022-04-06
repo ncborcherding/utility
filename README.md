@@ -52,7 +52,7 @@ Session Info for the intial data processing and analysis can be found [here](htt
 *****
 ### Getting Data
 
-Due to the size of the files, the  processed data outputs and code are available [here](https://zenodo.org/record/4995299).
+Due to the size of the files, the  processed data outputs and code are available [here](https://zenodo.org/record/6325603).
 
 #### Most up-to-date version
 
