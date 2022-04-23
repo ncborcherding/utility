@@ -33,11 +33,11 @@ Here is the current list of data sources, the number of cells that passed filter
 ### Methods
 
 #### Single-Cell Data Processing
-The filtered gene matrices output from Cell Ranger align function  from individual sequencing runs (10x Genomics, Pleasanton, CA) loaded into the R global environment. For each sequencing run cell barcodes were appended to contain a unique prefix to prevent issues with duplicate barcodes. The results were then ported into individual Seurat objects ([citation](https://pubmed.ncbi.nlm.nih.gov/34062119/)), where the cells with > 10% mitochondrial genes and/or 2.5x natural log distribution of counts were excluded for quality control purposes. At the individual sequencing run level, doublets were estimated using the scDblFinder (v1.4.0) R package. All the sequencing runs across experiments were merged into a single Seurat Object using the merge() function. All the data was then normalized using the default settings and 2,000 variable genes were identified using the "vst" method. Next the data was scaled with the default settings and principal components were calculated for 40 components. 
+The filtered gene matrices output from Cell Ranger align function  from individual sequencing runs (10x Genomics, Pleasanton, CA) loaded into the R global environment. For each sequencing run cell barcodes were appended to contain a unique prefix to prevent issues with duplicate barcodes. The results were then ported into individual Seurat objects ([citation](https://pubmed.ncbi.nlm.nih.gov/34062119/)), where the cells with > 10% mitochondrial genes and/or 2.5x natural log distribution of counts were excluded for quality control purposes. At the individual sequencing run level, doublets were estimated using the scDblFinder (v1.4.0) R package.  
 
 #### Annotation of Cells
 
-Automatic annotation was performed using the singler (v1.4.1) R package ([citation](https://pubmed.ncbi.nlm.nih.gov/30643263/)) with the HPCA ([citation](https://pubmed.ncbi.nlm.nih.gov/24053356/)) and Monaco ([citation](https://pubmed.ncbi.nlm.nih.gov/30726743/) data sets as references and the fine label discriminators. Individual sequencing runs were subsetted to run through the singleR algorithm in order to reduce memory demands. The output of all the singleR analyses were collated and appended to the meta data of the seurat object. Likewise, the ProjecTILs (v2.0.3) R Package ([citation](https://pubmed.ncbi.nlm.nih.gov/34017005/)) was used for automatic annotation as a partially orthogonal approach. Consensus annotation was derived from all 3 databases (HPCA, Monaco, ProjecTILs) using a majority approach. No annotation designation was assigned to cells that returned NA for both singleR and ProjecTILs. 
+Automatic annotation was performed using the singler (v1.4.1) R package ([citation](https://pubmed.ncbi.nlm.nih.gov/30643263/)) with the HPCA ([citation](https://pubmed.ncbi.nlm.nih.gov/24053356/)) and Monaco ([citation](https://pubmed.ncbi.nlm.nih.gov/30726743/)) data sets as references and the fine label discriminators. Individual sequencing runs were subsetted to run through the singleR algorithm in order to reduce memory demands. The output of all the singleR analyses were collated and appended to the meta data of the seurat object. Likewise, the ProjecTILs (v2.0.3) R Package ([citation](https://pubmed.ncbi.nlm.nih.gov/34017005/)) was used for automatic annotation as a partially orthogonal approach. Consensus annotation was derived from all 3 databases (HPCA, Monaco, ProjecTILs) using a majority approach. No annotation designation was assigned to cells that returned NA for both singleR and ProjecTILs. 
 
 #### Addition of TCR data
 
@@ -70,11 +70,11 @@ methods section (above) and please cite the appropriate manuscripts of the softw
 * singler v1.4.1 - [citation](https://pubmed.ncbi.nlm.nih.gov/30643263/)  
 * ProjecTILs v2.0.3 - [citation](https://pubmed.ncbi.nlm.nih.gov/34017005/)
 * UCell v1.0.0 - [citation](https://www.sciencedirect.com/science/article/pii/S2001037021002816?via%3Dihub)  
-* scRepertoire v1.3.4 - [citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)  
+* scRepertoire v1.3.5 - [citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)  
 
 #### Itemized List of Reference Data Used
 * Human Primary Cell Atlas (HPCA) - [citation](https://pubmed.ncbi.nlm.nih.gov/24053356/)  
-* Monaco Data Set (DICE) - [citation](https://pubmed.ncbi.nlm.nih.gov/30726743/)  
+* Monaco Data Set (Monaco) - [citation](https://pubmed.ncbi.nlm.nih.gov/30726743/)  
 
 *****
 ### Future Directions
