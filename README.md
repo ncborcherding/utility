@@ -28,7 +28,7 @@ Here is the current list of data sources, the number of cells that passed filter
 | GSE176021   | 132673| 0     | 71062|32011 |128387 | 436608 | Lung      | 8/1/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/34290408/) |
 | GSE179994   | 0     | 0     | 0    | 0   |0       | 140915 | Lung      | 3/30/22 |[cite](https://pubmed.ncbi.nlm.nih.gov/35121991/) |
 | GSE180268   | 0     | 0     | 29699| 0   | 0      | 23215 | HNSCC      | 9/21/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/34471285/) |
-| GSE180268   | 40429 | 0     | 0    | 0   | 27622  | 40429 | Renal      | 3/30/31 |NA |
+| GSE180268   | 40429 | 0     | 0    | 0   | 27622  | 40429 | Renal      | 3/30/31 |[cite](https://pubmed.ncbi.nlm.nih.gov/35668194/) |
 | PRJNA705465 | 30340 | 0     | 3505 | 0   | 15113  | 97966 | Renal      | 9/21/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/33861994/) |
 
 *****
