@@ -93,5 +93,6 @@ Questions, comments, suggestions, please feel free to contact Nick Borcherding v
 
 ******
 ### How to Support utility
-This project has evolved into a bit of an undertaking, beyond time and effort, it has required caffeine.
+This project has evolved into a bit of an undertaking, beyond time and effort, it has required caffeine. If you like to help, feel free to reach out or provide the caffeine directly:
+
 [<img width="208" alt="snapshot-bmc-button" src="https://user-images.githubusercontent.com/22754118/175768906-2061f309-d038-4a0a-8f5b-5f250bf451cf.png">](https://www.buymeacoffee.com/theHumanBorch)
