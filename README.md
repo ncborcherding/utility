@@ -7,6 +7,28 @@ and improve the [scRepertoire](https://github.com/ncborcherding/scRepertoire) R 
 the data set for everyone, a complete summary of the sequencing runs and the sample information can be found in the meta data of the Seurat object. 
 This repository contains the fourth version of the data - with updates in adding data and the pipeline itself (v0.0.4). The major change here is that there is not currently a single integrated object - each sequencing run has a corresponding .rds and .h5ad. The meta data variables of each Seurat object is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
 
+### Folder Structure
+```
+├── Data_conversion.Rmd
+├── NEWS.txt
+├── Processing_Utility.Rmd
+├── README.md
+├── Summarize_Data.Rmd
+├── annotation
+├── data
+│   ├── SequencingRuns - 10x Outputs
+│	└── processedData - Processed .rds/.h5
+├── qc
+├── scGateDB
+└── summaryInfo
+    ├── TcellSummaryTable.csv
+    ├── cohortSummaryTable.csv
+    ├── meta.data.headers.txt - what the meta data headers mean
+    ├── sample.directory.xlsx - all the available data for the cohort
+    ├── sessionInfo.txt - what I am running in terms of the pipeline
+    └── tumorSummaryTable.csv
+```
+
 #### Cohort Information
 Here is the current list of data sources, the number of cells that passed filtering by tissue type. Please cite the data if you are using utility!
 
@@ -88,3 +110,9 @@ There are areas in which we are actively hoping to develop to further facilitate
 *****
 ### Contact
 Questions, comments, suggestions, please feel free to contact Nick Borcherding via this repository, [email](mailto:ncborch@gmail.com), or using [twitter](https://twitter.com/theHumanBorch). 
+
+******
+### How to Support utility
+This project has evolved into a bit of an undertaking, beyond time and effort, it has required caffeine. If you like to help, feel free to reach out or provide the caffeine directly:
+
+[<img width="208" alt="snapshot-bmc-button" src="https://user-images.githubusercontent.com/22754118/175768906-2061f309-d038-4a0a-8f5b-5f250bf451cf.png">](https://www.buymeacoffee.com/theHumanBorch)
