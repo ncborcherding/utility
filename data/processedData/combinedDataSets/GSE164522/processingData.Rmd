@@ -1,0 +1,226 @@
+---
+title: Processing Combined Data: GSE164522
+author: 
+- name: Nick Borcherding
+  email: ncborch@gmail.com
+  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
+date: "June 18, 2022
+output:
+  BiocStyle::html_document:
+    toc_float: true
+
+---
+
+```{r, echo=FALSE, results="hide", message=FALSE}
+knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
+library(BiocStyle)
+```
+
+```{r}
+suppressPackageStartupMessages(library(Seurat))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(gridExtra))
+suppressPackageStartupMessages(library(viridis))
+suppressPackageStartupMessages(library(scDblFinder))
+suppressPackageStartupMessages(library(BiocParallel))
+suppressPackageStartupMessages(library(RColorBrewer))
+suppressPackageStartupMessages(library(ProjecTILs))
+suppressPackageStartupMessages(library(scGate))
+suppressPackageStartupMessages(library(Matrix))
+suppressPackageStartupMessages(library(SingleR))
+suppressPackageStartupMessages(library(celldex))
+suppressPackageStartupMessages(library(scRepertoire))
+suppressPackageStartupMessages(library(stringr))
+```
+
+
+```{r}
+PT.ref <- load.reference.map("./annotation/ref_TILAtlas_mouse_v1.rds")
+HPCA <- HumanPrimaryCellAtlasData()
+Monaco <- MonacoImmuneData()
+scGate_models_DB <- get_scGateDB()
+```
+#Old combined data
+```{r}
+
+#MN <- read.csv("GSE164522_CRLM_MN_expression.csv")
+#PBMC <- read.csv("GSE164522_CRLM_PBMC_expression.csv")
+#PT <- read.csv("GSE164522_CRLM_PT_expression.csv")
+#MT <- read.csv("GSE164522_CRLM_MT_expression.csv")
+#PN <- read.csv("GSE164522_CRLM_PN_expression.csv")
+
+TCR <- read.csv("GSE164522_vdj_final.csv")
+meta <- read.csv("GSE164522_CRLM_metadata.csv")
+#LN <- read.csv("GSE164522_CRLM_LN_expression.csv", check.names = FALSE, row.names = 1)
+#LN <- as.matrix(LN)
+#LN <- Matrix(LN, sparse = TRUE)
+sample.directory <- readxl::read_xlsx("sample.directory.xlsx")
+
+#colnames.LN <- colnames(LN)
+meta$X <- stringr::str_replace_all(meta$X, "-", ".")
+#x <- match(colnames.LN, meta$X)
+#tmp.meta <- meta[x,]
+
+colorectal.index <- c(4:13)
+ID.key <- c("patient08" = 4, 
+            "patient09" = 5,
+            "patient10" = 6,
+            "patient11" = 7,
+            "patient12" = 8, 
+            "patient13" = 9,
+            "patient14" = 10,
+            "patient15" = 11, 
+            "patient16" = 12, 
+            "patient17" = 13)
+tissue <- c("MN", "PBMC", "PT", "MT", "PN", "LN")
+tissue.key <- c("N", "B", "T", "M", "N", "L")
+for (i in seq_along(tissue)) {
+  RNA <- read.csv(paste0("GSE164522_CRLM_", tissue[i], "_expression.csv"), row.names = 1)
+  RNA <- as.matrix(RNA)
+  RNA <- Matrix(RNA, sparse = TRUE)
+  barcode.pos <- match(colnames(RNA), meta$X)
+  tmp.meta <- meta[barcode.pos,]
+  samples <- unique(tmp.meta$patient)
+  for(j in seq_along(samples)) {
+    tmp.meta2 <- subset(tmp.meta, patient == samples[j])
+    tmp <- RNA[,colnames(RNA) %in% tmp.meta2$X]
+    
+    which.patient <- tmp.meta2$patient[1]
+    
+    orig.ident <- paste0("C", tissue.key[i], ID.key[which.patient])
+    if(tissue[i] == "MN") {
+      orig.ident <- paste0(orig.ident, ".2")
+    } else if (tissue[i] == "PN") {
+      orig.ident <- paste0(orig.ident, ".1")
+    }
+     
+     tmp <- CreateSeuratObject(counts = tmp, project = orig.ident)
+     tmp <- subset(tmp, subset = nFeature_RNA > 100) #filter out low count/feature cells
+      tmp  <- RenameCells(object = tmp , new.names = paste0(orig.ident, "_", rownames(tmp[[]])))
+      
+      tmp[["mito.genes"]] <- PercentageFeatureSet(tmp, pattern = "^MT-")
+      
+      p1 <- VlnPlot(object = tmp, features = c("nCount_RNA")) + theme(legend.position = "none")
+      p2 <- VlnPlot(object = tmp, features = c("nFeature_RNA")) + theme(legend.position = "none")
+      p3 <- VlnPlot(object = tmp, features = c("mito.genes")) + theme(legend.position = "none")
+      
+      pdf(paste0(orig.ident, ".pdf"), height = 8, width=12)
+      grid.arrange(p1, p2, p3, ncol = 3)
+      dev.off()
+      
+      ###########################
+      #Here is the filtering step
+      ############################
+      standev <- sd(log(tmp$nFeature_RNA))*2.5 #cutting off above standard deviation of 2.5
+      mean <- mean(log(tmp$nFeature_RNA))
+      cut <- round(exp(standev+mean))
+      tmp <- subset(tmp, subset = mito.genes < 10 & nFeature_RNA < cut)
+      
+      ###########################################
+      #Estimate Doublets for Each Sequencing Run
+      ############################################
+      sce <- as.SingleCellExperiment(tmp)
+      sce <- scDblFinder(sce)
+      doublets <- data.frame(db.class = sce$scDblFinder.class, db.score = sce$scDblFinder.score)
+      rownames(doublets) <- rownames(sce@colData)
+      tmp <- AddMetaData(tmp, doublets)
+      rm(sce)
+      
+      #############################################
+      #Projectil Annotation of Cell Types
+      #############################################
+      
+      gate.check <- scGate(tmp, 
+                  model = scGate_models_DB$human$generic$Tcell.alphabeta)
+      if (length(which(gate.check$is.pure == "Pure")) > 0) {
+      
+          query.projected <- make.projection(tmp, 
+                                             ref = PT.ref, 
+                                             scGate_model = scGate_models_DB$human$generic$Tcell.alphabeta,
+                                             ncores = 1)
+          
+          #Lapply across list of Seurat objects
+          query.projected <- cellstate.predict(ref = PT.ref, query =query.projected , reduction = "umap", ndim = 2)
+            meta.pt <- query.projected[[]][c("functional.cluster", "functional.cluster.conf")]
+            colnames(meta.pt) <- c("PT.annot", "PT.score")
+            rownames(meta.pt) <- stringr::str_remove(rownames(meta.pt), "Q_")
+          tmp <- AddMetaData(tmp, meta.pt)
+          rm(query.projected)
+      } else {
+        tmp$PT.annot <- NA
+        tmp$PT.score <- NA
+      }
+      #############################################
+      #Singler Annotation of Cell Types
+      #############################################
+        
+      tmp.2 <- tmp@assays[["RNA"]]@counts
+      ####This approach for matrix conversion saves some memory
+      tmp.2 <- tmp.2[tabulate(summary(tmp.2)$i) != 0, , drop = FALSE]
+      com.res1 <- SingleR(tmp.2, ref=HPCA, labels=HPCA$label.fine, assay.type.test=1)
+    
+      df <- data.frame("labels" = com.res1$labels, "pruned.labels" = com.res1$pruned.labels)
+      rownames(df) <- rownames(com.res1)
+      colnames(df) <- paste0("HPCA.", colnames(df))
+      tmp <- AddMetaData(tmp,  df)
+    
+      
+      com.res2 <- SingleR(tmp.2, ref=Monaco, labels=Monaco$label.fine, assay.type.test=1)
+      df <- data.frame("labels" = com.res2$labels, "pruned.labels" = com.res2$pruned.labels)
+      rownames(df) <- rownames(com.res1)
+      colnames(df) <- paste0("Monaco.", colnames(df))
+      tmp <- AddMetaData(tmp,  df)
+      rm(tmp.2)
+      rm(df)
+    
+      
+  ######################################
+  #Adding TCR clonotypes
+  ######################################
+       if (length(which(gate.check$is.pure == "Pure")) > 0) {
+          barcode.track <- rownames(tmp[[]])
+          where.to.cut <- str_count(barcode.track[1], "[.]")
+          barcode.track <- unique(str_split(barcode.track, "[.]", simplify = TRUE)[,where.to.cut+1])
+          #barcode.track <- substr(barcode.track[1], nchar(barcode.track[1]), nchar(barcode.track[1]))
+          VDJ.tmp <- subset(TCR, Patient_b == toupper(str_remove(samples[j], "atient"))) 
+          VDJ.tmp <- VDJ.tmp[grepl(tissue[i], VDJ.tmp$TISSUE_b),]                    
+          VDJ.tmp <- VDJ.tmp[,5:42]
+          TRA <- VDJ.tmp[,c(1:18)]
+          colnames(TRA) <- str_remove_all(colnames(TRA), "_a")
+          TRB <- VDJ.tmp[,c(1,22:38)]
+          colnames(TRB) <- str_remove_all(colnames(TRB), "_b")
+          TCR.file <- rbind(TRA, TRB)
+          
+          TCR.file$barcode <- str_remove(TCR.file$barcode, "-1")
+          TCR.file$barcode <- paste0(TCR.file$barcode, ".", barcode.track)
+        
+          combinedObject <- combineTCR(TCR.file, samples = orig.ident, filterMulti = TRUE, removeNA = TRUE, cells = "T-AB")
+          if(nrow(combinedObject[[1]]) > 0) {
+            tmp <- combineExpression(combinedObject, tmp, cloneCall = "aa")
+          } else {
+            tmp$CTgene <- NA
+            tmp$CTnt <- NA
+            tmp$CTaa <- NA
+            tmp$CTstrict <- NA
+            tmp$Frequency <- NA
+            tmp$clonoType <- NA
+          }
+       } else {
+          tmp$CTgene <- NA
+          tmp$CTnt <- NA
+          tmp$CTaa <- NA
+          tmp$CTstrict <- NA
+          tmp$Frequency <- NA
+          tmp$clonoType <- NA
+      }
+      saveRDS(tmp, paste0(orig.ident, ".rds"))
+      rm(tmp)
+      gc()
+  }
+}
+  
+
+```
+
+

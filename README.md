@@ -5,9 +5,35 @@ Collection of Tumor-Infiltrating Lymphocyte Single-Cell Experiments with TCR seq
 The original intent of assembling a data set of publicly-available tumor-infiltrating T cells (TILs) with paired TCR sequencing was to expand 
 and improve the [scRepertoire](https://github.com/ncborcherding/scRepertoire) R package. However, after some discussion, we decided to release 
 the data set for everyone, a complete summary of the sequencing runs and the sample information can be found in the meta data of the Seurat object. 
-This repository contains the code for the initial processing and annotating of the data set (we are calling this version 0.0.1). 
+
 This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 
 3) iterating through automatic annotation, 4) unifying annotation via manual inspection and enrichment analysis, and 5) adding the TCR information. This information is stored in the meta data of the Seurat object - an explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
+
+### Folder Structure
+```
+├── Data_conversion.Rmd
+├── NEWS.txt
+├── Processing_Utility.Rmd
+├── README.md
+├── Summarize_Data.Rmd
+├── annotation
+├── data
+│   ├── SequencingRuns - 10x Outputs
+│	└── processedData - Processed .rds/.h5
+├── qc
+├── scGateDB
+└── summaryInfo
+    ├── TcellSummaryTable.csv
+    ├── cohortSummaryTable.csv
+    ├── meta.data.headers.txt - what the meta data headers mean
+    ├── sample.directory.xlsx - all the available data for the cohort
+    ├── sessionInfo.txt - what I am running in terms of the pipeline
+    └── tumorSummaryTable.csv
+```
+
+### Sample ID:
+
+<img align="center" src="https://github.com/ncborcherding/utility/blob/dev/www/utility.graphic.png">
 
 #### Cohort Information
 Here is the current list of data sources, the number of cells that passed filtering by tissue type. Please cite the data if you are using utility!
@@ -25,10 +51,12 @@ Here is the current list of data sources, the number of cells that passed filter
 | GSE154826   | 0     | 0     | 0    | 0   | 13414   | 14491  | Lung    | 9/21/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/34767762/) |
 | GSE159251   | 47721 | 0     | 5705 | 0   | 0      | 8355  | Melanoma    | 9/21/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/32539073/) |
 | GSE162500   | 23401 | 3761  | 0    | 0   | 0      | 14644 | Lung        | 6/19/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/33514641/) |
+| GSE164522   | 46027 | 0     | 46376|36648 | 86811 | 36990 | Colorectal | 6/25/22 | [cite](https://pubmed.ncbi.nlm.nih.gov/35303421/) |
 | GSE176021   | 132673| 0     | 71062|32011 |128387 | 436608 | Lung      | 8/1/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/34290408/) |
 | GSE179994   | 0     | 0     | 0    | 0   |0       | 140915 | Lung      | 3/30/22 |[cite](https://pubmed.ncbi.nlm.nih.gov/35121991/) |
 | GSE180268   | 0     | 0     | 29699| 0   | 0      | 23215 | HNSCC      | 9/21/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/34471285/) |
 | GSE180268   | 40429 | 0     | 0    | 0   | 27622  | 40429 | Renal      | 3/30/31 |[cite](https://pubmed.ncbi.nlm.nih.gov/35668194/) |
+| GSE195486   | 0     | 0     | 0    | 0   | 0      | 122511 | Ovarian   | 6/25/22 |[cite](https://pubmed.ncbi.nlm.nih.gov/35427494/) |
 | PRJNA705465 | 30340 | 0     | 3505 | 0   | 15113  | 97966 | Renal      | 9/21/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/33861994/) |
 
 *****

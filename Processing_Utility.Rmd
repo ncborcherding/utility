@@ -85,8 +85,7 @@ Monaco <- MonacoImmuneData()
 scGate_models_DB <- get_scGateDB()
 
 list <- NULL
-for(i in 225:243) {
-#for (i in seq_along(file_list)){
+for (i in seq_along(file_list)){
     tmp <-  Read10X(paste0("./data/SequencingRuns/", file_list[i]))
 
     ##Several data sets do not have the MT in front of the mitochondria genes
@@ -182,22 +181,6 @@ for(i in 225:243) {
     #Saving Preliminary Seurat Object
     #################################
     saveRDS(tmp, paste0("./data/processedData/individualSeurat/", file_list[i], ".rds"))
-    
-    #################################
-    #Filter and Save Just T-AB cells
-    #################################
-    tmp$T.filter <- ifelse(!is.na(tmp$PT.annot) & !is.na(tmp$CTaa), "Tcell", "Non")
-    
-    tmp <- subset(tmp, T.filter == "Tcell")
-    saveRDS(tmp, paste0("./data/processedData/individualTcells/", file_list[i], ".rds"))
-    
-    #################################
-    #Save Just TCRs
-    #################################
-    
-    TCR <- tmp[[]][,c("barcode", "CTgene", "CTaa")]
-    rownames(TCR) <- NULL
-    saveRDS(TCR, paste0("./data/processedData/TCRs/", file_list[i], ".rds"))
     
 }
 ```

@@ -1,3 +1,15 @@
+
+##########################
+#Changes to Version 0.0.5
+#########################
+Data Set Changes
+* Removed intermediate T cell Seurat Objects
+* Added GSE164522
+
+Processing Data Workflow Changes
+* Updated summarizeData to work with absence of defined T cell Seurat Objects 
+
+
 ##########################
 #Changes to Version 0.0.4
 #########################
