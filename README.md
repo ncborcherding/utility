@@ -74,12 +74,6 @@ Session Info for the intial data processing and analysis can be found [here](htt
 
 Due to the size of the files, the  processed data outputs and code are available [here](https://zenodo.org/record/6325603).
 
-#### Most up-to-date version
-
-#### Not a Static Resource 
-
-Although the initial cohort of data is deposited and accessible - new data and analyses are being added. Check out the [dev branch](https://github.com/ncborcherding/utility/tree/dev) for changes and I am working through a number of other sequencing experiments, in order to provide the most up-to-date version (as I work), the following [link](https://drive.google.com/drive/folders/1Y8fGXIRxIfEk1BiQ4X2MC0CTznkXf_AW?usp=sharing) can be used.
-
 *****
 ### Citations
 
