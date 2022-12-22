@@ -5,7 +5,11 @@ Collection of Tumor-Infiltrating Lymphocyte Single-Cell Experiments with TCR seq
 The original intent of assembling a data set of publicly-available tumor-infiltrating T cells (TILs) with paired TCR sequencing was to expand 
 and improve the [scRepertoire](https://github.com/ncborcherding/scRepertoire) R package. However, after some discussion, we decided to release 
 the data set for everyone, a complete summary of the sequencing runs and the sample information can be found in the meta data of the Seurat object. 
+
 An explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
+
+This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 
+3) iterating through automatic annotation, and 4) adding the TCR information. This information is stored in the meta data of the Seurat objects - an explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
 
 ### Folder Structure
 ```
@@ -70,7 +74,7 @@ Automatic annotation was performed using the singler (v1.4.1) R package ([citati
 
 #### Addition of TCR data
 
-The filtered contig annotation T cell receptor (TCR) data for available sequencing runs were loaded into the R global environment. Individual contigs were combined using the combineTCR() function of scRepertoire (v1.3.5) R Package ([citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)). Clonotypes were assigned to barcodes and were multiple duplicate chains for individual cells were filtered to select for the top expressing contig by read count. The clonotype data was then added to the Seurat Object with proportion across individual patients being used to calculate frequency.
+The filtered contig annotation T cell receptor (TCR) data for available sequencing runs were loaded into the R global environment. Individual contigs were combined using the combineTCR() function of scRepertoire (v1.5.3) R Package ([citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)). Clonotypes were assigned to barcodes and were multiple duplicate chains for individual cells were filtered to select for the top expressing contig by read count. The clonotype data was then added to the Seurat Object with proportion across individual patients being used to calculate frequency.
 
 #### Session Info
 
@@ -80,6 +84,7 @@ Session Info for the initial data processing and analysis can be found [here](ht
 ### Getting Data
 
 Due to the size of the files, the  processed data outputs and code are available [here](https://zenodo.org/record/6325603).
+
 
 #### Not a Static Resource 
 
@@ -97,11 +102,11 @@ each data set summarized above or can be found in the [summary table](https://gi
 methods section (above) and please cite the appropriate manuscripts of the software or references that were used.
 
 #### Itemized List of the Software Used
-* Seurat v4.1.p - [citation](https://pubmed.ncbi.nlm.nih.gov/34062119/)  
+* Seurat v4.1.0 - [citation](https://pubmed.ncbi.nlm.nih.gov/34062119/)  
 * singler v1.4.1 - [citation](https://pubmed.ncbi.nlm.nih.gov/30643263/)  
 * ProjecTILs v2.0.3 - [citation](https://pubmed.ncbi.nlm.nih.gov/34017005/)
 * UCell v1.0.0 - [citation](https://www.sciencedirect.com/science/article/pii/S2001037021002816?via%3Dihub)  
-* scRepertoire v1.3.4 - [citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)  
+* scRepertoire v1.5.3 - [citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)  
 
 #### Itemized List of Reference Data Used
 * Human Primary Cell Atlas (HPCA) - [citation](https://pubmed.ncbi.nlm.nih.gov/24053356/)  
@@ -110,6 +115,7 @@ methods section (above) and please cite the appropriate manuscripts of the softw
 *****
 ### Future Directions
 
+* Unified Dimensional Reduction of T cells with Cluster Annotations
 * Data Hosting for Interactive Analysis
 * Easy Submission Portal for Researchers to Add Data
 * Using the Data to Build a Reference Atlas
