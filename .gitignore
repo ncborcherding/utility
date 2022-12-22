@@ -14,3 +14,6 @@ data/processedData/combinedDataSets/GSE164522/GSE164522_CRLM_PT_expression.csv
 data/processedData/combinedDataSets/GSE164522/GSE164522_vdj_final.csv
 www/Icon
 data/TCRs/Icon
+*.png
+*.log
+*.pdf

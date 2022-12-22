@@ -65,6 +65,7 @@ for (i in seq_along(full.data)){
     }
     full.data.summary
     tmp$filter <- "No"
+    
     tmp$filter <- ifelse(!is.na(tmp$CTaa) & !is.na(tmp[[]][,col.pos]), "Yes", "No") 
     
     

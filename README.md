@@ -5,9 +5,7 @@ Collection of Tumor-Infiltrating Lymphocyte Single-Cell Experiments with TCR seq
 The original intent of assembling a data set of publicly-available tumor-infiltrating T cells (TILs) with paired TCR sequencing was to expand 
 and improve the [scRepertoire](https://github.com/ncborcherding/scRepertoire) R package. However, after some discussion, we decided to release 
 the data set for everyone, a complete summary of the sequencing runs and the sample information can be found in the meta data of the Seurat object. 
-
-This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 
-3) iterating through automatic annotation, 4) unifying annotation via manual inspection and enrichment analysis, and 5) adding the TCR information. This information is stored in the meta data of the Seurat object - an explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
+An explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
 
 ### Folder Structure
 ```
@@ -19,7 +17,7 @@ This involves several steps 1) loading the respective GE data, 2) harmonizing th
 ├── annotation
 ├── data
 │   ├── SequencingRuns - 10x Outputs
-│	└── processedData - Processed .rds/.h5
+│	└── processedData - Processed .rds
 ├── qc
 ├── scGateDB
 └── summaryInfo
@@ -57,13 +55,14 @@ Here is the current list of data sources, the number of cells that passed filter
 | GSE180268   | 0     | 0     | 29699| 0   | 0      | 23215 | HNSCC      | 9/21/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/34471285/) |
 | GSE180268   | 40429 | 0     | 0    | 0   | 27622  | 40429 | Renal      | 3/30/31 |[cite](https://pubmed.ncbi.nlm.nih.gov/35668194/) |
 | GSE195486   | 0     | 0     | 0    | 0   | 0      | 122511 | Ovarian   | 6/25/22 |[cite](https://pubmed.ncbi.nlm.nih.gov/35427494/) |
+| GSE200996   | 1211659| 0    | 0    | 0   | 0      | 86235  | HNSCC     | 7/15/22 | [cite](https://pubmed.ncbi.nlm.nih.gov/35803260/) | 
 | PRJNA705465 | 30340 | 0     | 3505 | 0   | 15113  | 97966 | Renal      | 9/21/21 |[cite](https://pubmed.ncbi.nlm.nih.gov/33861994/) |
 
 *****
 ### Methods
 
 #### Single-Cell Data Processing
-The filtered gene matrices output from Cell Ranger align function  from individual sequencing runs (10x Genomics, Pleasanton, CA) loaded into the R global environment. For each sequencing run cell barcodes were appended to contain a unique prefix to prevent issues with duplicate barcodes. The results were then ported into individual Seurat objects ([citation](https://pubmed.ncbi.nlm.nih.gov/34062119/)), where the cells with > 10% mitochondrial genes and/or 2.5x natural log distribution of counts were excluded for quality control purposes. At the individual sequencing run level, doublets were estimated using the scDblFinder (v1.4.0) R package. All the sequencing runs across experiments were merged into a single Seurat Object using the merge() function. All the data was then normalized using the default settings and 2,000 variable genes were identified using the "vst" method. Next the data was scaled with the default settings and principal components were calculated for 40 components. 
+The filtered gene matrices output from Cell Ranger align function  from individual sequencing runs (10x Genomics, Pleasanton, CA) loaded into the R global environment. For each sequencing run cell barcodes were appended to contain a unique prefix to prevent issues with duplicate barcodes. The results were then ported into individual Seurat objects ([citation](https://pubmed.ncbi.nlm.nih.gov/34062119/)), where the cells with > 10% mitochondrial genes and/or 2x natural log distribution of counts were excluded for quality control purposes. At the individual sequencing run level, doublets were estimated using the scDblFinder (v1.4.0) R package. All the sequencing runs across experiments were merged into a single Seurat Object using the merge() function. All the data was then normalized using the default settings and 2,000 variable genes were identified using the "vst" method. Next the data was scaled with the default settings and principal components were calculated for 40 components. 
 
 #### Annotation of Cells
 
@@ -75,18 +74,20 @@ The filtered contig annotation T cell receptor (TCR) data for available sequenci
 
 #### Session Info
 
-Session Info for the intial data processing and analysis can be found [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/sessionInfo.txt).
+Session Info for the initial data processing and analysis can be found [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/sessionInfo.txt).
 
 *****
 ### Getting Data
 
 Due to the size of the files, the  processed data outputs and code are available [here](https://zenodo.org/record/6325603).
 
-#### Most up-to-date version
-
 #### Not a Static Resource 
 
 Although the initial cohort of data is deposited and accessible - new data and analyses are being added. Check out the [dev branch](https://github.com/ncborcherding/utility/tree/dev) for changes and I am working through a number of other sequencing experiments, in order to provide the most up-to-date version (as I work), the following [link](https://drive.google.com/drive/folders/1Y8fGXIRxIfEk1BiQ4X2MC0CTznkXf_AW?usp=sharing) can be used.
+
+#### Python-compatible version
+
+The individual Seurat files for each run/sample have been converted into h5ad format ([see code](https://github.com/ncborcherding/utility/blob/dev/Data_conversion.Rmd)) and are available at the separate zenodo repository. ***Insert Here***
 
 *****
 ### Citations

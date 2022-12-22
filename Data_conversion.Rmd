@@ -4,7 +4,7 @@ author:
 - name: Nick Borcherding
   email: ncborch@gmail.com
   affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
-date: "March 30th, 2022"
+date: "July 15, 2022"
 output:
   BiocStyle::html_document:
     toc_float: true
@@ -24,6 +24,11 @@ library(reticulate)
 library(SeuratDisk)
 use_condaenv("r-reticulate")
 files <- list.files("./data/processedData/individualSeurat/rds")
+names <- stringr::str_remove_all(files, ".rds")
+
+h5.files <- list.files("./data/processedData/individualSeurat/h5ad")
+names.h5 <- stringr::str_remove_all(h5.files, ".h5ad")
+files <- files[-which(names %in% names.h5)]
 names <- stringr::str_remove_all(files, ".rds")
 
 for(i in seq_along(files)) {

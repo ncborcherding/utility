@@ -1,0 +1,199 @@
+---
+title: "Integrating the data"
+author: 
+- name: Nick Borcherding
+  email: ncborch@gmail.com
+  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
+date: "July 14th 2022"
+output:
+  BiocStyle::html_document:
+    toc_float: true
+---
+
+```{r}
+library(Seurat)
+library(batchelor)
+source("./R/PrepSCT.R")
+library(Matrix)
+library(sctransform)
+library(scran)
+library(bluster)
+library(scater)
+library(leidenAlg)
+"%!in%" <- Negate("%in%")
+
+rds.files <- list.files("./data/processedData/individualSeurat/rds/", pattern = ".rds")
+
+#######################
+#Generating Seurat List
+######################
+
+sc.list <- list()
+for (i in seq_along(rds.files)) {
+  tmp <- readRDS(paste0("./data/processedData/individualSeurat/rds/", rds.files[i]))
+  tmp[["percent.mt"]] <- PercentageFeatureSet(tmp, pattern = "^MT-")
+  tmp[["percent.rb"]] <- PercentageFeatureSet(tmp, pattern = "^RBS|RPL")
+ 
+  tmp <- SCTransform(tmp,
+                     vars.to.regress = c('percent.mt', 'percent.rb', "nFeature_RNA"), 
+                     vst.flavor = "v2",
+                     min_cells = 3, 
+                     verbose = FALSE)
+  #Will not maintain seurat object for dim red and clustering
+  tmp <- PrepSCTIntegration(list(tmp), anchor.features = 3000)
+  tmp <- PrepSCTFindMarkers(tmp[[1]])
+  tmp <- DietSeurat(tmp, assay = "SCT")
+  if("functional.cluster" %in% colnames(tmp[[]])) {
+    if("PT.annot" %!in% colnames(tmp[[]])) {
+      colnames(tmp@meta.data)[which(colnames(tmp[[]]) == "functional.cluster")] <- "PT.annot"
+      colnames(tmp@meta.data)[which(colnames(tmp[[]]) == "functional.cluster.conf")] <- "PT.score"
+    } 
+  }
+    if("PT.annot" %!in% colnames(tmp[[]])) {
+      tmp$PT.annot <- NA
+  }
+  # Filtering for T cells - 1) passed scGate and 2) CTaa
+  tmp$filter <- ifelse(!is.na(tmp$PT.annot) & !is.na(tmp$CTaa), "keep", "remove")
+  if(nrow(tmp[[]][tmp$filter == "keep",]) == 0){
+    next()
+  }
+  tmp <- subset(tmp,  filter == "keep")
+  tmp <- as.SingleCellExperiment(tmp,
+                                 assay = "SCT")
+  sc.list[[i]] <- tmp
+  print(paste0("Sample ", i, " is done!"))
+}
+saveRDS(sc.list, "./data/sc.list.rds")
+rm(tmp)
+gc()
+
+sc.list <- readRDS("./data/sc.list.rds")
+source("./R/kansas.city.shuffle.R")
+
+
+###########################
+#The Knasas City Shuffle
+###########################
+#kansas.city.shuffle() is tapped out by C++ limits, 
+#tested it up to 350 run or 1.55 million cells
+#####################################################
+#Canibalizing the function to work with 577 runs
+#aiming to find the variable genes of randomly sample 1/2 the data
+#use those genes to subset the whole data set
+#then will merge the resulting logcounts 
+
+sc.list <- sc.list[lengths(sc.list) != 0]
+sc.list <- sc.list[-c(199,211)]
+#Number of cells per run - will be used to re-extract the data
+for(i in seq_along(sc.list)) {
+    tmp.dim <- dim(sc.list[[i]])[2]
+    if(i == 1) {
+      num.cells <- tmp.dim
+    } else {
+      num.cells <- c(num.cells, tmp.dim)
+    }
+}
+
+
+#Removing the nunused assay for purpose of dim reduction
+sc.list <- lapply(sc.list, function(x) {
+      tmp <- assay(x, "logcounts")
+      tmp
+})
+
+#Selecting the variable genes
+set.seed(1234)
+sample.data <- sample(length(sc.list), length(sc.list)*0.5)
+combined.experiments <- merge.sparse(sc.list[sample.data])
+var.features <- modelGeneVar(combined.experiments)
+genes <- getTopHVGs(var.features, n=2500)
+genes <- Trex::quietTCRgenes(genes)
+write.csv(genes, "features.csv", row.names = FALSE)
+rm(combined.experiments)
+gc()
+
+#Filtering out the non-variable genes
+for(i in seq_along(sc.list)) {
+  sc.list[[i]] <- sc.list[[i]][rownames(sc.list[[i]]) %in% genes,]
+}
+
+#Here is the shuffle to get everything matching and 
+#functional with fastMNN
+combined.experiments <- merge.sparse(sc.list)
+new.sce.list <- lapply(num.cells, function(x) {
+    matrix.subset <- combined.experiments[,1:x]
+    matrix.subset
+})
+saveRDS(new.sce.list, "./data/kansas.sc.list.rds")
+rm(sc.list)
+rm(combined.experiments)
+gc()
+
+
+new.sce.list <- readRDS("./data/kansas.sc.list.rds")
+
+cells <- which(unlist(lapply(new.sce.list, ncol)) <= 20)
+new.sce.list <- new.sce.list[-cells]
+
+#Running fastMNN()
+out <- fastMNN(new.sce.list)
+saveRDS(out, "./data/fastMNN_output.rds")
+
+
+####################
+#Run PCA for Dim Red
+###################
+pca <- calculatePCA(out@int_colData$reducedDims$corrected, 
+                    transposed = TRUE)
+saveRDS(pca, "./data/pca.rds")
+
+
+##############################
+#Calculating Nearest Neighbors
+#############################
+
+knn.gr <- makeKNNGraph(out@int_colData$reducedDims$corrected, 
+                       k = 20)
+saveRDS(knn.gr, "./data/knn.graph.rds")
+
+
+
+knn.cluster <- leiden.community(knn.gr, 
+                                resolution = 1,
+                                n.iterations = 10)
+saveRDS(knn.cluster, "./data/knn.cluster.rds")
+
+##################
+#Calculating UMAP
+#################
+
+pca2 <- SingleCellExperiment(assays=list(counts=t(pca), logcounts=t(pca)))
+umap <- runUMAP(pca2, 
+               # dimred = "corrected",
+                n_neighbors = 40)
+saveRDS(umap, "./data/calculated.umap.rds")
+
+ggplot() + 
+  geom_point(aes(umap@int_colData$reducedDims@listData$UMAP[,1], umap@int_colData$reducedDims@listData$UMAP[,2]))
+
+################
+#Data Wrangling
+################
+#seurat.merge <- readRDS("./data/seurat.merged.rds")
+#seurat.merge$knn.leiden <- knn.cluster$membership
+#seurat.merge$snn.leiden <- snn.cluster$membership
+#umap <- CreateDimReducObject(embeddings = umap@int_colData$reducedDims@listData$UMAP, 
+#                            loadings = umap@int_colData$reducedDims@listData$UMAP, 
+#                            projected = umap@int_colData$reducedDims@listData$UMAP, 
+#                            assay = "RNA", 
+#                            key = "umap")
+#seurat.merge[["umap"]] <- umap
+
+#seurat.merge <- PrepSCTFindMarkers(seurat.merge)
+#saveRDS(seurat.merge, "./data/seurat.merged.rds")
+```
+
+```{r}
+seurat.merge <- readRDS("./data/seurat.merged.rds")
+```
+
