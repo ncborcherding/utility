@@ -11,10 +11,6 @@ output:
 
 ---
 
-```{r, echo=FALSE, results="hide", message=FALSE}
-knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
-library(BiocStyle)
-```
 
 
 ```{r setup, include=FALSE}
@@ -49,6 +45,9 @@ rownames(tcell.tumor.data.summary) <- unique(pt.directory$Tissue)
 
 for (i in seq_along(full.data)){
     tmp <- readRDS(paste0("./data/processedData/individualSeurat/rds/", full.data[i]))
+    if (!any(colnames(tmp@meta.data) == "CTaa")) {
+      next()
+    }
     total.cells <- nrow(tmp[[]])
     directory.tmp <- pt.directory[pt.directory$SampleLabel == str_remove(full.data[i], ".rds"),]
     

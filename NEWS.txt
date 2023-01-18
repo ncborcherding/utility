@@ -1,3 +1,20 @@
+##########################
+#Changes to Version 0.0.6
+#########################
+Data Set Changes
+* Added GSE195486, GSE200996, GSE201425, GSE213243
+
+Processing Data Workflow Changes
+* Added deCoupler code for gene network analysis
+* After testing common integration pipelines, added scArches - SCVI integration 
+* Removed old integration code
+
+To Do List:
+* Make central T object with latent dimensions from searches
+* Finalized clustering
+* Annotate clusters
+* Trex Dimensionall Reduction
+
 
 ##########################
 #Changes to Version 0.0.5
