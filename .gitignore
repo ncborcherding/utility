@@ -17,3 +17,5 @@ data/TCRs/Icon
 *.png
 *.log
 *.pdf
+*.csv
+*.h5
