@@ -175,24 +175,16 @@ for (i in seq_along(tissue)) {
           combinedObject <- combineTCR(TCR.file, 
                                        samples = orig.ident, 
                                        filterMulti = TRUE)
-          if(nrow(combinedObject[[1]]) > 0) {
+      if(nrow(combinedObject[[1]]) > 0) {
             tmp <- combineExpression(combinedObject, tmp, cloneCall = "aa")
-          } else {
+      } else {
             tmp$CTgene <- NA
             tmp$CTnt <- NA
             tmp$CTaa <- NA
             tmp$CTstrict <- NA
             tmp$Frequency <- NA
             tmp$clonoType <- NA
-          }
-       } else {
-          tmp$CTgene <- NA
-          tmp$CTnt <- NA
-          tmp$CTaa <- NA
-          tmp$CTstrict <- NA
-          tmp$Frequency <- NA
-          tmp$clonoType <- NA
-       }
+      }
     
        tmp <- DietSeurat(tmp)
        tmp[["prediction.score.celltype.l1"]] <- NULL
@@ -205,6 +197,7 @@ for (i in seq_along(tissue)) {
       saveRDS(tmp, paste0("~/Documents/GitHub/utility/data/processedData/seuratObjects/", orig.ident, ".rds"))
       rm(tmp)
       gc()
+  }
 }
 
   
