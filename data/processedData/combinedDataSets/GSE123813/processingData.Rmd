@@ -1,5 +1,5 @@
 ---
-title: Processing Combined Data: GSE179994
+title: Processing Combined Data: GSE123813
 author: 
 - name: Nick Borcherding
   email: ncborch@gmail.com
@@ -11,66 +11,59 @@ output:
 
 ---
 
-```{r, echo=FALSE, results="hide", message=FALSE}
-knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
-library(BiocStyle)
-```
-
-#Old combined data
-```{r}
-dat <- readRDS("GSE123814.rds")
-directory <- readxl::read_xlsx("~/Documents/GitHub/utility/summaryInfo/sample.directory.xlsx") #Meta.data
-meta.cols <- which(colnames(dat[[]]) %in% colnames(directory))
-processing.cols <- which(grepl("DICE|UCell|HPCA|consensus|db.", colnames(dat[[]])))
-
-dat@meta.data <- dat@meta.data[,-c(meta.cols, processing.cols)]
-
-
-```
-
-
-#Utility Workflow and Export
-
 ```{r}
 suppressPackageStartupMessages(library(Seurat))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(dplyr))
-suppressPackageStartupMessages(library(gridExtra))
 suppressPackageStartupMessages(library(viridis))
 suppressPackageStartupMessages(library(scDblFinder))
 suppressPackageStartupMessages(library(BiocParallel))
 suppressPackageStartupMessages(library(RColorBrewer))
-suppressPackageStartupMessages(library(ProjecTILs))
-suppressPackageStartupMessages(library(scGate))
-suppressPackageStartupMessages(library(Matrix))
 suppressPackageStartupMessages(library(SingleR))
 suppressPackageStartupMessages(library(celldex))
 suppressPackageStartupMessages(library(scRepertoire))
+suppressPackageStartupMessages(library(Azimuth))
+suppressPackageStartupMessages(library(SeuratData))
+suppressPackageStartupMessages(library(scran))
+suppressPackageStartupMessages(library(patchwork))
 ```
 
 
+# Getting Processed Sequencing Runs
+
 ```{r}
-PT.ref <- load.reference.map("~/Documents/GitHub/utility/annotation/ref_TILAtlas_mouse_v1.rds")
 HPCA <- HumanPrimaryCellAtlasData()
 Monaco <- MonacoImmuneData()
-scGate_models_DB <- get_scGateDB()
 
+dat <- readRDS("GSE123814.rds")
 list <- SplitObject(dat, split.by = "orig.ident")
 
 for (i in seq_along(list)){
-    tmp <- list[[i]]
+    tmp <-UpdateSeuratObject(list[[i]])
     tmp <- subset(tmp, subset = nFeature_RNA > 100) #filter out low count/feature cells\
+    
+    orig.ident <- names(list)[i]
 
     tmp[["mito.genes"]] <- PercentageFeatureSet(tmp, pattern = "^MT-")
+    tmp[["ribo.genes"]] <- PercentageFeatureSet(tmp, pattern = "^RPS|RPL-")
     
-    p1 <- VlnPlot(object = tmp, features = c("nCount_RNA")) + theme(legend.position = "none")
-    p2 <- VlnPlot(object = tmp, features = c("nFeature_RNA")) + theme(legend.position = "none")
-    p3 <- VlnPlot(object = tmp, features = c("mito.genes")) + theme(legend.position = "none")
+     VlnPlot(object = tmp, 
+            features = c("nCount_RNA", "nFeature_RNA", "mito.genes", "ribo.genes"), 
+            pt.size = 0) + 
+      theme(legend.position = "none") + 
+      plot_layout(ncol =2)
+      
+    ggsave(paste0("~/Documents/GitHub/utility/qc/", orig.ident, ".pdf"), height = 8, width=8)
     
-    pdf(paste0("/Volumes/GoogleDrive/Other\ computers/iMac/utility/qc/", names(list)[i], ".pdf"), height = 8, width=12)
-    grid.arrange(p1, p2, p3, ncol = 3)
-    dev.off()
+    ###########################
+    #Here is the filtering step
+    ############################
+    standev <- sd(log(tmp$nFeature_RNA))*2.5 #cutting off above standard deviation of 2.5
+    mean <- mean(log(tmp$nFeature_RNA))
+    cut <- round(exp(standev+mean))
+    tmp <- subset(tmp, subset = mito.genes < 10 & nFeature_RNA < cut)
     
+  
     ###########################
     #Here is the filtering step
     ############################
@@ -87,84 +80,97 @@ for (i in seq_along(list)){
     doublets <- data.frame(db.class = sce$scDblFinder.class, db.score = sce$scDblFinder.score)
     rownames(doublets) <- rownames(sce@colData)
     tmp <- AddMetaData(tmp, doublets)
-    rm(sce)
+
     
-    #############################################
-    #Projectil Annotation of Cell Types
-    #############################################
-    "%!in%" <- Negate("%in%")
-    if(i %!in% c(13,19,22,23,25,27,29,30,34,35,37,38,40,43,44) ){ #For some reason BCT1.2 does not work for projecTIL
-        query.projected <- make.projection(tmp, 
-                                           seurat.k.filter = filter,
-                                           ref = PT.ref, 
-                                           scGate_model = scGate_models_DB$human$generic$Tcell.alphabeta,
-                                           ncores = 1)
-        
-        #Lapply across list of Seurat objects
-        query.projected <- cellstate.predict(ref = PT.ref, query =query.projected , reduction = "umap", ndim = 2)
-          meta <- query.projected[[]][c("functional.cluster", "functional.cluster.conf")]
-          colnames(meta) <- c("PT.annot", "PT.score")
-          rownames(meta) <- stringr::str_remove(rownames(meta), "Q_")
-        tmp <- AddMetaData(tmp, meta)
-        rm(query.projected)
-    }
+    ###########################################
+    #Estimate Doublets for Each Sequencing Run
+    ############################################
+    sce <- as.SingleCellExperiment(tmp)
+    sce <- scDblFinder(sce)
+    doublets <- data.frame(db.class = sce$scDblFinder.class, db.score = sce$scDblFinder.score)
+    rownames(doublets) <- rownames(sce@colData)
+    tmp <- AddMetaData(tmp, doublets)
+
+    ###########################################
+    #Seurat Azimuth Annotation
+    ############################################
+    tmp <- NormalizeData(tmp, verbose = FALSE)
+    tmp <- ScaleData(tmp, verbose = FALSE)
+    VariableFeatures(tmp) <- getTopHVGs(as.SingleCellExperiment(tmp), 
+                                        n=2000)
+    tmp <- RunPCA(tmp, verbose = FALSE)
+    tmp<- RunUMAP(tmp, dims = 1:30, verbose = FALSE)
+    tmp <- FindNeighbors(object = tmp, 
+                         features = VariableFeatures(tmp), 
+                         verbose = FALSE)
+   
+    tmp <- RunAzimuth(tmp, 
+                      reference = "pbmcref",
+                      verbose = FALSE)
       
     #############################################
     #Singler Annotation of Cell Types
     #############################################
       
-    tmp.2 <- tmp@assays[["RNA"]]@counts
-    ####This approach for matrix conversion saves some memory
-    tmp.2 <- tmp.2[tabulate(summary(tmp.2)$i) != 0, , drop = FALSE]
-    com.res1 <- SingleR(tmp.2, ref=HPCA, labels=HPCA$label.fine, assay.type.test=1)
-  
+    com.res1 <- SingleR(sce, ref=HPCA, labels=HPCA$label.fine, assay.type.test=1)
     df <- data.frame("labels" = com.res1$labels, "pruned.labels" = com.res1$pruned.labels)
     rownames(df) <- rownames(com.res1)
     colnames(df) <- paste0("HPCA.", colnames(df))
     tmp <- AddMetaData(tmp,  df)
   
     
-    com.res2 <- SingleR(tmp.2, ref=Monaco, labels=Monaco$label.fine, assay.type.test=1)
+    com.res2 <- SingleR(sce, ref=Monaco, labels=Monaco$label.fine, assay.type.test=1)
     df <- data.frame("labels" = com.res2$labels, "pruned.labels" = com.res2$pruned.labels)
     rownames(df) <- rownames(com.res1)
     colnames(df) <- paste0("Monaco.", colnames(df))
     tmp <- AddMetaData(tmp,  df)
-    rm(tmp.2)
     rm(df)
+    rm(sce)
     
-    ############################
-    #Remove TCRs with NAs
-    ###########################
-    if(i %!in% c(13,19,21,22,23,25, 27,29,30,32,34,35,37,38,40,43,44,46) ){ #For some reason BCT1.2 does not work for projecTIL
-      TCRA <- stringr::str_split(tmp$CTaa, "_", simplify = TRUE)[,1]
-      TCRB <- stringr::str_split(tmp$CTaa, "_", simplify = TRUE)[,2]
-      
-      tmp@meta.data[which(is.na(TCRA) | TCRA == ""), c("CTgene", "CTnt", "CTaa", "CTstrict", "Frequency", "cloneType")] <- NA
-      tmp@meta.data[which(is.na(TCRB) | TCRB == ""), c("CTgene", "CTnt", "CTaa", "CTstrict", "Frequency", "cloneType")] <- NA
-    } else {
-      tmp@meta.data[, c("CTgene", "CTnt", "CTaa", "CTstrict", "Frequency", "cloneType")] <- NA
-    }
-      
-    saveRDS(tmp, paste0("/Volumes/GoogleDrive/Other\ computers/iMac/utility/data/processedData/individualSeurat/", names(list)[i], ".rds"))
+   processed.data <- tmp[[]] %>%
+                        na.omit() %>%
+                        group_by(CTaa) %>%
+                        mutate(clonalFrequency = n()) %>%
+                        ungroup() %>%
+                        mutate(clonalProportion = clonalFrequency / sum(clonalFrequency)) %>%
+                        as.data.frame()
+   
+   rownames(processed.data) <- processed.data$barcode
+   
+   cloneSize=c(None = 0, Rare = 1e-4, Small = 0.001, 
+             Medium = 0.01, Large = 0.1, Hyperexpanded = 1)
+
+
+    processed.data$cloneSize <- NA
     
-    #################################
-    #Filter and Save Just T-AB cells
-    #################################
-    if(i %!in% c(13,19,21,22,23,25, 27,29,30,32,34,35,37,38,40,43,44,46) ){
-    tmp$T.filter <- ifelse(!is.na(tmp$PT.annot) & !is.na(tmp$CTaa), "Tcell", "Non")
-    if (length(which(tmp$T.filter == "Tcell")) > 1) {
-        tmp <- subset(tmp, T.filter == "Tcell")
-        saveRDS(tmp, paste0("/Volumes/GoogleDrive/Other\ computers/iMac/utility/data/processedData/individualTcells/", names(list)[i], ".rds"))
-        
-        #################################
-        #Save Just TCRs
-        #################################
-        
-        TCR <- tmp[[]][,c("barcode", "CTgene", "CTaa")]
-        rownames(TCR) <- NULL
-        saveRDS(TCR, paste0("/Volumes/GoogleDrive/Other\ computers/iMac/utility/data/processedData/TCRs/", names(list)[i], ".rds"))
+    for (x in seq_along(cloneSize)) { names(cloneSize)[x] <- 
+              paste0(names(cloneSize[x]), ' (', cloneSize[x-1], ' < X <= ', cloneSize[x], ')') 
     }
+
+
+
+    for (y in 2:length(cloneSize)) { 
+      processed.data$cloneSize <- ifelse(processed.data$clonalProportion > cloneSize[y-1] & processed.data$clonalProportion <= cloneSize[y], names(cloneSize[y]), processed.data$cloneSize) 
     }
+
+      processed.data <- processed.data[,c("CTgene", "CTnt", "CTaa", "CTstrict", "clonalFrequency", "clonalProportion", "cloneSize")]
+      
+      tmp <- AddMetaData(tmp, processed.data)
+      tmp@meta.data <- tmp[[]][,c("orig.ident", "nCount_RNA", "nFeature_RNA", "mito.genes", "ribo.genes", "CTgene",  "CTnt", "CTaa", "CTstrict",  "clonalFrequency", "clonalProportion", "cloneSize", "db.class", "db.score", "predicted.celltype.l1.score", "predicted.celltype.l1", "predicted.celltype.l2.score", "predicted.celltype.l2", "predicted.celltype.l3.score", "predicted.celltype.l3", "mapping.score", "HPCA.labels", "HPCA.pruned.labels", "Monaco.labels", "Monaco.pruned.labels")]
+  
+      tmp <- DietSeurat(tmp)
+      tmp[["prediction.score.celltype.l1"]] <- NULL
+      tmp[["prediction.score.celltype.l2"]] <- NULL
+      tmp[["prediction.score.celltype.l3"]] <- NULL
+      tmp[["query_ref.nn"]] <- NULL
+      tmp@assays$RNA$scale.data <- NULL
+    
+    
+      saveRDS(tmp, paste0("~/Documents/GitHub/utility/data/processedData/seuratObjects/", orig.ident, ".rds"))
+      rm(tmp)
+      gc()
+    
+  
 }
 ```
 

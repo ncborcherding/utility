@@ -11,10 +11,6 @@ output:
 
 ---
 
-```{r, echo=FALSE, results="hide", message=FALSE}
-knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
-library(BiocStyle)
-```
 
 ```{r}
 suppressPackageStartupMessages(library(Seurat))
@@ -168,6 +164,7 @@ for (i in seq_along(tissue)) {
           TRB <- VDJ.tmp[,c(1,22:38)]
           colnames(TRB) <- stringr::str_remove_all(colnames(TRB), "_b")
           TCR.file <- rbind(TRA, TRB)
+        if (nrow(TCR.file) > 0){
           
           TCR.file$barcode <- stringr::str_remove(TCR.file$barcode, "-1")
           TCR.file$barcode <- paste0(TCR.file$barcode, ".", barcode.track)
@@ -175,8 +172,7 @@ for (i in seq_along(tissue)) {
           combinedObject <- combineTCR(TCR.file, 
                                        samples = orig.ident, 
                                        filterMulti = TRUE)
-      if(nrow(combinedObject[[1]]) > 0) {
-            tmp <- combineExpression(combinedObject, tmp, cloneCall = "aa")
+          tmp <- combineExpression(combinedObject, tmp, cloneCall = "aa")
       } else {
             tmp$CTgene <- NA
             tmp$CTnt <- NA
@@ -191,7 +187,7 @@ for (i in seq_along(tissue)) {
        tmp[["prediction.score.celltype.l2"]] <- NULL
        tmp[["prediction.score.celltype.l3"]] <- NULL
        tmp[["query_ref.nn"]] <- NULL
-        tmp@assays$RNA$scale.data <- NULL
+       tmp@assays$RNA$scale.data <- NULL
     
     
       saveRDS(tmp, paste0("~/Documents/GitHub/utility/data/processedData/seuratObjects/", orig.ident, ".rds"))

@@ -1,10 +1,10 @@
 ---
-title: utility, a collection of publically-available tumor-infiltrating T-cells and other tissue types, v0.0.1.
+title: uTILity, a collection of publically-available tumor-infiltrating T-cells and other tissue types, v1.
 author: 
 - name: Nick Borcherding
   email: ncborch@gmail.com
   affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
-date: "March 30th, 2022"
+date: "November 2nd, 2023"
 output:
   BiocStyle::html_document:
     toc_float: true
@@ -40,26 +40,26 @@ Questions, comments, suggestions, please feel free to contact Nick Borcherding v
 
 In general I like to load libraries here that we will use universally or during the intitation process, and then call other libraries when we need them in the code chunks that are relevant. 
 
-```{r setup, include=FALSE}
+```{r}
 suppressPackageStartupMessages(library(Seurat))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(dplyr))
-suppressPackageStartupMessages(library(gridExtra))
 suppressPackageStartupMessages(library(viridis))
 suppressPackageStartupMessages(library(scDblFinder))
 suppressPackageStartupMessages(library(BiocParallel))
 suppressPackageStartupMessages(library(RColorBrewer))
-suppressPackageStartupMessages(library(ProjecTILs))
-suppressPackageStartupMessages(library(scGate))
-suppressPackageStartupMessages(library(Matrix))
 suppressPackageStartupMessages(library(SingleR))
 suppressPackageStartupMessages(library(celldex))
 suppressPackageStartupMessages(library(scRepertoire))
+suppressPackageStartupMessages(library(Azimuth))
+suppressPackageStartupMessages(library(SeuratData))
+suppressPackageStartupMessages(library(scran))
+suppressPackageStartupMessages(library(patchwork))
 ```
 
 I also like to set a color palette before I begin - this way all the colors are consistent throughout figures. 
 
-```{r setup, include=FALSE}
+```{r}
 colorblind_vector <- colorRampPalette(viridis_pal(option = "B")(7))
 ```
 
@@ -72,117 +72,146 @@ colorblind_vector <- colorRampPalette(viridis_pal(option = "B")(7))
 dir.create("./qc")
 
 file_list <- list.files("./data/SequencingRuns")
-file_list <- file_list[!grepl("SCT|BCT", file_list)]
-pt.directory <- readxl::read_xlsx("./summaryInfo/sample.directory.xlsx")
-file_list <- file_list[file_list %in% pt.directory$SampleLabel]
 
 ###########################
 #Load Annotation Reference
 ###########################
-PT.ref <- load.reference.map("./annotation/ref_TILAtlas_mouse_v1.rds")
 HPCA <- HumanPrimaryCellAtlasData()
 Monaco <- MonacoImmuneData()
-scGate_models_DB <- get_scGateDB()
 
-list <- NULL
+options(Seurat.object.assay.version = "v5")
+
 for (i in seq_along(file_list)){
     tmp <-  Read10X(paste0("./data/SequencingRuns/", file_list[i]))
-
-    ##Several data sets do not have the MT in front of the mitochondria genes
-    mito <- c("ATP8", "ATP6", "CO1", "CO2", "CO3", "CYB", "ND1", "ND2", "ND3", "ND4L", "ND4", "ND5", "ND6", "RNR2", "TA", "TR", "TN", "TD", "TC", "TE", "TQ", "TG", "TH", "TI", "TL1", "TL2", "TK", "TM", "TF", "TP", "TS1", "TS2", "TT", "TW", "TY", "TV", "RNR1")
-
-    x <- which(rownames(tmp) %in% mito)
-    if (length(x) > 0) {
-      y <- rownames(tmp)[x] 
-      y<- paste0("MT-", y)
-      rownames(tmp)[x] <- y
+    if(inherits(tmp, "list")) {
+      tmp <- tmp[[1]]
+      rownames(tmp) <- stringr::str_split(rownames(tmp), "_", simplify = TRUE)[,2]
+      tmp <- tmp[rownames(tmp) != "",]
     }
-    tmp <- CreateSeuratObject(counts = tmp, project = file_list[i])
-    tmp <- subset(tmp, subset = nFeature_RNA > 100) #filter out low count/feature cells
-    tmp  <- RenameCells(object = tmp , new.names = paste0(file_list[i], "_", rownames(tmp[[]])))
-
-    tmp[["mito.genes"]] <- PercentageFeatureSet(tmp, pattern = "^MT-")
+   
     
-    p1 <- VlnPlot(object = tmp, features = c("nCount_RNA")) + theme(legend.position = "none")
-    p2 <- VlnPlot(object = tmp, features = c("nFeature_RNA")) + theme(legend.position = "none")
-    p3 <- VlnPlot(object = tmp, features = c("mito.genes")) + theme(legend.position = "none")
+    tmp <- CreateAssayObject(counts = tmp)
+    SeuratObj <-  CreateSeuratObject(counts = tmp, 
+                                     assay = "RNA",
+                               project = file_list[i])
+    SeuratObj$nCount_RNA <- colSums(SeuratObj@assays$RNA@counts)
+    SeuratObj$nFeature_RNA <- colSums(SeuratObj@assays$RNA@counts != 0)
     
-    pdf(paste0("./qc/", file_list[i], ".pdf"), height = 8, width=12)
-    grid.arrange(p1, p2, p3, ncol = 3)
-    dev.off()
+    SeuratObj <-  subset(SeuratObj, subset = nFeature_RNA > 100) #filter out low count/feature cells
+    SeuratObj  <- RenameCells(object = SeuratObj , new.names = paste0(file_list[i], "_", rownames(SeuratObj[[]])))
+    
+    SeuratObj[["mito.genes"]] <- PercentageFeatureSet(SeuratObj, pattern = "^MT-")
+    SeuratObj[["ribo.genes"]] <- PercentageFeatureSet(SeuratObj, pattern = "^RPS|RPL-")
+    
+    VlnPlot(object = SeuratObj, 
+            features = c("nCount_RNA", "nFeature_RNA", "mito.genes", "ribo.genes"), 
+            pt.size = 0) + 
+      theme(legend.position = "none") + 
+      plot_layout(ncol =2)
+    ggsave(paste0("./qc/", file_list[i], ".pdf"), height = 8, width=8)
+    
     
     ###########################
     #Here is the filtering step
     ############################
-    standev <- sd(log(tmp$nFeature_RNA))*2.5 #cutting off above standard deviation of 2.5
-    mean <- mean(log(tmp$nFeature_RNA))
+    standev <- sd(log(SeuratObj$nFeature_RNA))*2.5 #cutting off above standard deviation of 2.5
+    mean <- mean(log(SeuratObj$nFeature_RNA))
     cut <- round(exp(standev+mean))
-    tmp <- subset(tmp, subset = mito.genes < 10 & nFeature_RNA < cut)
+    SeuratObj <- subset(SeuratObj, subset = mito.genes < 10 & nFeature_RNA < cut)
     
     ###########################################
     #Estimate Doublets for Each Sequencing Run
     ############################################
-    sce <- as.SingleCellExperiment(tmp)
-    sce <- scDblFinder(sce, BPPARAM=MulticoreParam(3))
+    sce <- as.SingleCellExperiment(SeuratObj)
+    sce <- scDblFinder(sce)
     doublets <- data.frame(db.class = sce$scDblFinder.class, db.score = sce$scDblFinder.score)
     rownames(doublets) <- rownames(sce@colData)
-    tmp <- AddMetaData(tmp, doublets)
-    rm(sce)
+    SeuratObj <- AddMetaData(SeuratObj, doublets)
+
     
-    #############################################
-    #Projectil Annotation of Cell Types
-    #############################################
-    
-      query.projected <- make.projection(tmp, 
-                                         ref = PT.ref, 
-                                         scGate_model = scGate_models_DB$human$generic$Tcell.alphabeta,
-                                         ncores = 1)
-      
-      #Lapply across list of Seurat objects
-      query.projected <- cellstate.predict(ref = PT.ref, query =query.projected , reduction = "umap", ndim = 2)
-        meta <- query.projected[[]][c("functional.cluster", "functional.cluster.conf")]
-        colnames(meta) <- c("PT.annot", "PT.score")
-        rownames(meta) <- stringr::str_remove(rownames(meta), "Q_")
-      tmp <- AddMetaData(tmp, meta)
-      rm(query.projected)
+    ###########################################
+    #Seurat Azimuth Annotation
+    ############################################
+    SeuratObj <- NormalizeData(SeuratObj, verbose = FALSE)
+    SeuratObj <- ScaleData(SeuratObj, verbose = FALSE)
+    VariableFeatures(SeuratObj) <- getTopHVGs(as.SingleCellExperiment(SeuratObj), 
+                                        n=2000)
+    SeuratObj <- RunPCA(SeuratObj, verbose = FALSE)
+    SeuratObj<- RunUMAP(SeuratObj, dims = 1:30, verbose = FALSE)
+    SeuratObj <- FindNeighbors(object = SeuratObj, 
+                         features = VariableFeatures(SeuratObj), 
+                         verbose = FALSE)
+   
+   SeuratObj <- RunAzimuth(SeuratObj, 
+                      reference = "pbmcref",
+                      verbose = FALSE)
       
     #############################################
     #Singler Annotation of Cell Types
     #############################################
       
-    tmp.2 <- tmp@assays[["RNA"]]@counts
-    ####This approach for matrix conversion saves some memory
-    tmp.2 <- tmp.2[tabulate(summary(tmp.2)$i) != 0, , drop = FALSE]
-    com.res1 <- SingleR(tmp.2, ref=HPCA, labels=HPCA$label.fine, assay.type.test=1)
+    com.res1 <- SingleR(sce, ref=HPCA, labels=HPCA$label.fine, assay.type.test=1)
   
     df <- data.frame("labels" = com.res1$labels, "pruned.labels" = com.res1$pruned.labels)
     rownames(df) <- rownames(com.res1)
     colnames(df) <- paste0("HPCA.", colnames(df))
-    tmp <- AddMetaData(tmp,  df)
+    SeuratObj <- AddMetaData(SeuratObj,  df)
   
     
-    com.res2 <- SingleR(tmp.2, ref=Monaco, labels=Monaco$label.fine, assay.type.test=1)
+    com.res2 <- SingleR(sce, ref=Monaco, labels=Monaco$label.fine, assay.type.test=1)
     df <- data.frame("labels" = com.res2$labels, "pruned.labels" = com.res2$pruned.labels)
     rownames(df) <- rownames(com.res1)
     colnames(df) <- paste0("Monaco.", colnames(df))
-    tmp <- AddMetaData(tmp,  df)
-    rm(tmp.2)
+    SeuratObj <- AddMetaData(SeuratObj,  df)
     rm(df)
+    rm(sce)
       
     ######################################
     #Adding TCR clonotypes
     ######################################
     
-    TCR.file <- read.csv(paste0("./data/SequencingRuns/", file_list[i], "/filtered_contig_annotations.csv"))
-    combinedObject <- combineTCR(TCR.file, samples = file_list[i], filterMulti = TRUE, removeNA = TRUE, cells = "T-AB")
-    tmp <- combineExpression(combinedObject, tmp, cloneCall = "aa")
+    TCR.file <- list.files(paste0("./data/SequencingRuns/", file_list[i]), pattern = "annotations")[1]
+    if(is.na(TCR.file)) {
+      SeuratObj$CTaa <- NA
+      SeuratObj$CTnt <- NA
+      SeuratObj$CTgene <- NA
+      SeuratObj$CTstrict <- NA
+      SeuratObj$clonalProportion <- NA
+      SeuratObj$clonalFrequency <- NA
+      SeuratObj$cloneSize <- NA
+    } else {
+      TCR.file <- read.csv(paste0("./data/SequencingRuns/", file_list[i], "/", TCR.file))
+      combinedObject <- combineTCR(TCR.file, 
+                                   samples = file_list[i], 
+                                   filterMulti = TRUE)
+      SeuratObj <- combineExpression(combinedObject, 
+                               SeuratObj, 
+                               cloneCall = "aa")
+    }
+    
+    SeuratObj <- DietSeurat(SeuratObj)
+    SeuratObj[["prediction.score.celltype.l1"]] <- NULL
+    SeuratObj[["prediction.score.celltype.l2"]] <- NULL
+    SeuratObj[["prediction.score.celltype.l3"]] <- NULL
+    SeuratObj[["query_ref.nn"]] <- NULL
+    SeuratObj@assays$RNA$scale.data <- NULL
     
     #################################
     #Saving Preliminary Seurat Object
     #################################
-    saveRDS(tmp, paste0("./data/processedData/individualSeurat/", file_list[i], ".rds"))
-    
+    saveRDS(SeuratObj, paste0("./data/", file_list[i], ".rds"))
+    rm(SeuratObj)
+    rm(tmp)
+    gc()
 }
+#FU on 
+#C.N.3.1
+#C.N.3.2
+#C.N.4.1
+#M.B.2
+#m.b.8
+#"R.T.11.1"
+
 ```
 
 
