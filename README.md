@@ -1,5 +1,8 @@
 # utility
-Collection of Tumor-Infiltrating Lymphocyte Single-Cell Experiments with TCR sequencing data
+
+## Comprehensive collection of Single-Cell Tumor-Infiltrating Lymphocyte Data
+
+<img align="right" src="https://www.borch.dev/uploads/screpertoire/reference/figures/utility_hex.png" width="305" height="352">
 
 ### Introduction
 The original intent of assembling a data set of publicly-available tumor-infiltrating T cells (TILs) with paired TCR sequencing was to expand 
@@ -21,9 +24,8 @@ This involves several steps 1) loading the respective GE data, 2) harmonizing th
 ├── annotation
 ├── data
 │   ├── SequencingRuns - 10x Outputs
-│	└── processedData - Processed .rds
+│	  └── processedData - Processed .rds and larger combined cohorts
 ├── qc
-├── scGateDB
 └── summaryInfo
     ├── TcellSummaryTable.csv
     ├── cohortSummaryTable.csv
@@ -35,7 +37,7 @@ This involves several steps 1) loading the respective GE data, 2) harmonizing th
 
 ### Sample ID:
 
-<img align="center" src="https://github.com/ncborcherding/utility/blob/dev/www/utility.graphic.png">
+<img align="center" src="https://github.com/ncborcherding/utility/blob/dev/www/utility_info.png">
 
 #### Cohort Information
 Here is the current list of data sources, the number of cells that passed filtering by tissue type. Please cite the data if you are using utility!
@@ -76,7 +78,7 @@ Automatic annotation was performed using the singler (v1.4.1) R package ([citati
 
 #### Addition of TCR data
 
-The filtered contig annotation T cell receptor (TCR) data for available sequencing runs were loaded into the R global environment. Individual contigs were combined using the combineTCR() function of scRepertoire (v1.5.3) R Package ([citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)). Clonotypes were assigned to barcodes and were multiple duplicate chains for individual cells were filtered to select for the top expressing contig by read count. The clonotype data was then added to the Seurat Object with proportion across individual patients being used to calculate frequency.
+The filtered contig annotation T cell receptor (TCR) data for available sequencing runs were loaded into the R global environment. Individual contigs were combined using the combineTCR() function of scRepertoire (v2.0.0) R Package ([citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)). Clonotypes were assigned to barcodes and were multiple duplicate chains for individual cells were filtered to select for the top expressing contig by read count. The clonotype data was then added to the Seurat Object with proportion across individual patients being used to calculate frequency.
 
 #### Session Info
 
@@ -86,10 +88,6 @@ Session Info for the initial data processing and analysis can be found [here](ht
 ### Getting Data
 
 Due to the size of the files, the  processed data outputs and code are available [here](https://zenodo.org/record/6325603).
-
-#### Python-compatible version
-
-The individual Seurat files for each run/sample have been converted into h5ad format ([see code](https://github.com/ncborcherding/utility/blob/dev/Data_conversion.Rmd)) and are available at the separate zenodo repository. ***Insert Here***
 
 *****
 ### Citations

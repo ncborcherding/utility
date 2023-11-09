@@ -82,15 +82,16 @@ Monaco <- MonacoImmuneData()
 options(Seurat.object.assay.version = "v5")
 
 for (i in seq_along(file_list)){
-    tmp <-  Read10X(paste0("./data/SequencingRuns/", file_list[i]))
+    tmp <-  Read10X_h5(paste0("./data/SequencingRuns/", file_list[i], "/matrix.h5"))
     if(inherits(tmp, "list")) {
       tmp <- tmp[[1]]
-     # rownames(tmp) <- stringr::str_split(rownames(tmp), "_", simplify = TRUE)[,2]
-      #tmp <- tmp[rownames(tmp) != "",]
+      rownames(tmp) <- stringr::str_split(rownames(tmp), "_", simplify = TRUE)[,2]
+      tmp <- tmp[rownames(tmp) != "",]
     }
    
     
     tmp <- CreateAssayObject(counts = tmp)
+    
     SeuratObj <-  CreateSeuratObject(counts = tmp, 
                                      assay = "RNA",
                                project = file_list[i])
@@ -132,19 +133,30 @@ for (i in seq_along(file_list)){
     ###########################################
     #Seurat Azimuth Annotation
     ############################################
-    SeuratObj <- NormalizeData(SeuratObj, verbose = FALSE)
-    SeuratObj <- ScaleData(SeuratObj, verbose = FALSE)
-    VariableFeatures(SeuratObj) <- getTopHVGs(as.SingleCellExperiment(SeuratObj), 
-                                        n=2000)
-    SeuratObj <- RunPCA(SeuratObj, verbose = FALSE)
-    SeuratObj<- RunUMAP(SeuratObj, dims = 1:30, verbose = FALSE)
-    SeuratObj <- FindNeighbors(object = SeuratObj, 
-                         features = VariableFeatures(SeuratObj), 
-                         verbose = FALSE)
-   
-   SeuratObj <- RunAzimuth(SeuratObj, 
-                      reference = "pbmcref",
-                      verbose = FALSE)
+    if(file_list[i] == "E.B.25.1") {
+      SeuratObj$predicted.celltype.l1.score <- NA
+      SeuratObj$predicted.celltype.l1 <- NA 
+      SeuratObj$predicted.celltype.l2.score <- NA
+      SeuratObj$predicted.celltype.l2 <- NA
+      SeuratObj$predicted.celltype.l3.score <- NA
+      SeuratObj$predicted.celltype.l3 <- NA
+      SeuratObj$mapping.score <- NA
+    } else {
+        SeuratObj <- NormalizeData(SeuratObj, verbose = FALSE)
+        SeuratObj <- ScaleData(SeuratObj, verbose = FALSE)
+        VariableFeatures(SeuratObj) <- getTopHVGs(as.SingleCellExperiment(SeuratObj), 
+                                            n=2000)
+        SeuratObj <- RunPCA(SeuratObj, verbose = FALSE, npcs = pca.dim)
+        SeuratObj<- RunUMAP(SeuratObj, dims = 1:30, verbose = FALSE)
+        SeuratObj <- FindNeighbors(object = SeuratObj, 
+                             features = VariableFeatures(SeuratObj), 
+                             verbose = FALSE)
+       
+       SeuratObj <- RunAzimuth(SeuratObj, 
+                          reference = "pbmcref",
+                          k.weight = pca.dim,
+                          verbose = FALSE)
+    }
       
     #############################################
     #Singler Annotation of Cell Types
@@ -199,11 +211,19 @@ for (i in seq_along(file_list)){
     #################################
     #Saving Preliminary Seurat Object
     #################################
-    saveRDS(SeuratObj, paste0("./data/processedData/seuratObjects/", file_list[i], ".rds"))
+    saveRDS(SeuratObj, paste0("./data/", file_list[i], ".rds"))
     rm(SeuratObj)
     rm(tmp)
     gc()
 }
+#FU on 
+#C.N.3.1
+#C.N.3.2
+#C.N.4.1
+#M.B.2
+#m.b.8
+#"R.T.11.1"
+
 ```
 
 

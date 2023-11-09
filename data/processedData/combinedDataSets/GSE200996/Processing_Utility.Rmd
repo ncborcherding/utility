@@ -1,0 +1,326 @@
+---
+title: utility, a collection of publically-available tumor-infiltrating T-cells and other tissue types, v0.0.1.
+author: 
+- name: Nick Borcherding
+  email: ncborch@gmail.com
+  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
+date: "March 30th, 2022"
+output:
+  BiocStyle::html_document:
+    toc_float: true
+
+---
+
+```{r, echo=FALSE, results="hide", message=FALSE}
+knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
+library(BiocStyle)
+```
+
+# Introduction
+
+The original intent of assembling a data set of publicly-available tumor-infiltrating T cells (TILs) with paired TCR sequencing was to expand and improve the [scRepertoire](https://github.com/ncborcherding/scRepertoire) R package. However, after some discussion, we decided to release the data set for everyone, a complete summary of the sequencing runs and the sample information can be found in the meta data of the Seurat object. Below is the code used for the initial processing and annotating of the data set (we are calling this version 0.0.1). This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 3) iterating through automatic annotation, 4) unifying annotation, and 5) adding the TCR information. 
+
+As of the initial release, there are 538,346 cells that passed the initial filtering with approximately 65% TIL of T cell origin, estimated by the annotators. Of these total cells approximately 75% (~257,000 T cells) had recoverable TCR information. The final Seurat object, **filtered_tmpects_harmony.rds** compressed is just over 4 GB, uncompressed and in the R global environment it is > 26 GB. Please consider the memory capacity of the computer you will use to analyze this data. 
+
+## Future Directions  
+
+It is our intent to update this file periodically as more data become available, we will use version control to track the additions. We are also actively looking at hosting options to allow users to selectively download a portion of the data and also upload the their single-cell data to be incorporated into the centralized data set. **Please note** as it is our intention to expand the data, we are not assigning clusters to the cells, as these might change over time. If you are planning to cluster, please read through the [Harmony Tutorial](https://portals.broadinstitute.org/harmony/articles/quickstart.html#seurat) for advice on dimensional reductions.
+
+## Citation
+
+utility is not published nor has it gone through peer review. If utilizing the data, please cite the corresponding data sets. This can be found under **"Cohort"** in the meta data.
+
+## Questions or Comments
+
+Questions, comments, suggestions, please feel free to contact Nick Borcherding via this repository, [email](mailto:ncborch@gmail.com), or using [twitter](https://twitter.com/theHumanBorch). **Also** if you are interested in dimensional reduction of TCR sequencing data, please get in touch as that is the intent of the assembled data and we would love to talk more!
+
+***
+
+# Loading Libraries
+
+In general I like to load libraries here that we will use universally or during the intitation process, and then call other libraries when we need them in the code chunks that are relevant. 
+
+```{r}
+suppressPackageStartupMessages(library(Seurat))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(viridis))
+suppressPackageStartupMessages(library(scDblFinder))
+suppressPackageStartupMessages(library(BiocParallel))
+suppressPackageStartupMessages(library(RColorBrewer))
+suppressPackageStartupMessages(library(SingleR))
+suppressPackageStartupMessages(library(celldex))
+suppressPackageStartupMessages(library(scRepertoire))
+suppressPackageStartupMessages(library(Azimuth))
+suppressPackageStartupMessages(library(SeuratData))
+suppressPackageStartupMessages(library(scran))
+suppressPackageStartupMessages(library(patchwork))
+```
+
+***
+
+# Loading and Processing the Data
+
+## Load, filter and combine Data
+```{r eval=FALSE}
+dir.create("./qc")
+
+file_list <- list.files("./data/")
+
+
+
+###########################
+#Load Annotation Reference
+###########################
+HPCA <- HumanPrimaryCellAtlasData()
+Monaco <- MonacoImmuneData()
+
+options(Seurat.object.assay.version = "v5")
+
+#for (i in seq_along(file_list)){
+for(i in 19:26) {
+    mtx <- list.files(paste0("./data/", file_list[i]), pattern = "h5")
+    tmp <-  Read10X_h5(paste0("./data/", file_list[i], "/", mtx))
+
+    tmp <- CreateSeuratObject(counts = tmp, project = file_list[i])
+    tmp$nCount_RNA <- colSums(tmp@assays$RNA@layers$counts)
+    tmp$nFeature_RNA <- colSums(tmp@assays$RNA@layers$counts != 0)
+    
+    tmp <- subset(tmp, subset = nFeature_RNA > 100 & nCount_RNA > 100) #filter out low count/feature cells
+    tmp  <- RenameCells(object = tmp , new.names = paste0(file_list[i], "_", rownames(tmp[[]])))
+
+    tmp[["mito.genes"]] <- PercentageFeatureSet(tmp, pattern = "^MT-")
+    tmp[["ribo.genes"]] <- PercentageFeatureSet(tmp, pattern = "^RPS|RPL-")
+    
+    VlnPlot(object = tmp, 
+            features = c("nCount_RNA", "nFeature_RNA", "mito.genes", "ribo.genes"), 
+            pt.size = 0) + 
+      theme(legend.position = "none") + 
+      plot_layout(ncol =2)
+    ggsave(paste0("./qc/", file_list[i], ".pdf"), height = 8, width=8)
+    
+    
+    ###########################
+    #Here is the filtering step
+    ############################
+    standev <- sd(log(tmp$nFeature_RNA))*2.5 #cutting off above standard deviation of 2.5
+    mean <- mean(log(tmp$nFeature_RNA))
+    cut <- round(exp(standev+mean))
+    tmp <- subset(tmp, subset = mito.genes < 10 & nFeature_RNA < cut)
+    
+    ###########################################
+    #Estimate Doublets for Each Sequencing Run
+    ############################################
+    sce <- as.SingleCellExperiment(tmp)
+    sce <- scDblFinder(sce, BPPARAM=MulticoreParam(3))
+    doublets <- data.frame(db.class = sce$scDblFinder.class, db.score = sce$scDblFinder.score)
+    rownames(doublets) <- rownames(sce@colData)
+    tmp <- AddMetaData(tmp, doublets)
+
+    ###########################################
+    #Seurat Azimuth Annotation
+    ############################################
+    tmp <- NormalizeData(tmp, verbose = FALSE)
+    tmp <- ScaleData(tmp, verbose = FALSE)
+    VariableFeatures(tmp) <- getTopHVGs(as.SingleCellExperiment(tmp), 
+                                            n=2000)
+    tmp <- RunPCA(tmp, verbose = FALSE)
+    tmp<- RunUMAP(tmp, dims = 1:30, verbose = FALSE)
+    tmp <- FindNeighbors(object = tmp, 
+                             features = VariableFeatures(tmp), 
+                             verbose = FALSE)
+       
+    tmp <- RunAzimuth(tmp, 
+                          reference = "pbmcref",
+                          verbose = FALSE)
+       
+    #############################################
+    #Singler Annotation of Cell Types
+    #############################################
+      
+    com.res1 <- SingleR(sce, ref=HPCA, labels=HPCA$label.fine, assay.type.test=1)
+  
+    df <- data.frame("labels" = com.res1$labels, "pruned.labels" = com.res1$pruned.labels)
+    rownames(df) <- rownames(com.res1)
+    colnames(df) <- paste0("HPCA.", colnames(df))
+    tmp <- AddMetaData(tmp,  df)
+  
+    
+    com.res2 <- SingleR(sce, ref=Monaco, labels=Monaco$label.fine, assay.type.test=1)
+    df <- data.frame("labels" = com.res2$labels, "pruned.labels" = com.res2$pruned.labels)
+    rownames(df) <- rownames(com.res1)
+    colnames(df) <- paste0("Monaco.", colnames(df))
+    tmp <- AddMetaData(tmp,  df)
+    rm(df)
+    rm(sce)
+      
+    ######################################
+    #Adding TCR clonotypes
+    ######################################
+    
+    TCR.file <- read.csv(paste0("./data/", file_list[i], "/filtered_contig_annotations.csv.gz"))
+    combinedObject <- combineTCR(TCR.file, 
+                                 samples = file_list[i], 
+                                 filterMulti = TRUE)
+    tmp <- combineExpression(combinedObject, tmp, cloneCall = "aa")
+    
+    tmp <- DietSeurat(tmp)
+    tmp[["prediction.score.celltype.l1"]] <- NULL
+    tmp[["prediction.score.celltype.l2"]] <- NULL
+    tmp[["prediction.score.celltype.l3"]] <- NULL
+    tmp[["query_ref.nn"]] <- NULL
+    tmp@assays$RNA$scale.data <- NULL
+    
+    #################################
+    #Saving Preliminary Seurat Object
+    #################################
+    saveRDS(tmp, paste0("./data/processedData/", file_list[i], ".rds"))
+    rm(tmp)
+    gc()
+    
+}
+```
+
+```{r}
+file_list <- list.files("./multiplexed_data", pattern = ".h5")
+exceptions <- file_list[(length(file_list)-3):length(file_list)]
+TCR_list <- list.files("./multiplexed_data", pattern = ".csv")
+hash.directory <- read.csv("hash.directory.csv", check.names = FALSE, row.names = 1)
+
+for (i in seq_along(file_list)){
+    tmp <-  Read10X_h5(paste0("./multiplexed_data/", file_list[i]))
+    TCR.file <- read.csv(paste0("./multiplexed_data/", TCR_list[i]))
+
+    umis <- tmp[[1]]
+
+    # For generating a hashtag count matrix from FASTQ files, please refer to
+    # https://github.com/Hoohm/CITE-seq-Count.  Load in the HTO count matrix
+    htos <- tmp[[2]]
+    if(file_list[i] %in% exceptions) {
+      htos <- htos[-c(5:7),]
+    }
+
+    # Select cell barcodes detected by both RNA and HTO In the example datasets we have already
+    # filtered the cells for you, but perform this step for clarity.
+    joint.bcs <- intersect(colnames(umis), colnames(htos))
+
+    # Subset RNA and HTO counts by joint cell barcodes
+    umis <- umis[, joint.bcs]
+    htos <- as.matrix(htos[, joint.bcs])
+
+    pbmc.hashtag <- CreateSeuratObject(counts = umis)
+    pbmc.hashtag$nCount_RNA <- colSums(pbmc.hashtag@assays$RNA@layers$counts)
+    pbmc.hashtag$nFeature_RNA <- colSums(pbmc.hashtag@assays$RNA@layers$counts != 0)
+    
+    
+    # Normalize RNA data with log normalization
+    pbmc.hashtag <- NormalizeData(pbmc.hashtag)
+    # Find and scale variable features
+    pbmc.hashtag <- FindVariableFeatures(pbmc.hashtag, selection.method = "mean.var.plot")
+    pbmc.hashtag <- ScaleData(pbmc.hashtag, features = VariableFeatures(pbmc.hashtag))
+    
+    # Add HTO data as a new assay independent from RNA
+    pbmc.hashtag[["HTO"]] <- CreateAssayObject(counts = htos)
+    pbmc.hashtag$nCount_HTO <- colSums(pbmc.hashtag@assays$HTO@counts)
+    
+    pbmc.hashtag <- subset(pbmc.hashtag, subset = nCount_RNA > 100)
+    pbmc.hashtag <- subset(pbmc.hashtag, subset = nCount_HTO > 5)
+    # Normalize HTO data, here we use centered log-ratio (CLR) transformation
+    pbmc.hashtag <- NormalizeData(pbmc.hashtag, assay = "HTO", normalization.method = "CLR")
+    
+    pbmc.hashtag <- HTODemux(pbmc.hashtag, assay = "HTO", positive.quantile = 0.99)
+    pbmc.hashtag <- subset(pbmc.hashtag, hash.ID != "Doublet")
+    
+    hash.reference <- hash.directory[,file_list[i]]
+    names(hash.reference) <- paste0(paste0("Hashtag", 1:7), "-TotalSeqC")
+    
+    pbmc.hashtag$orig.ident <- as.vector(hash.reference[pbmc.hashtag$hash.ID])
+    pbmc.hashtag <- subset(pbmc.hashtag, orig.ident != "")
+    
+    pbmc.hashtag <- SplitObject(pbmc.hashtag, split.by = "orig.ident")
+    
+    for(j in seq_along(pbmc.hashtag)) {
+        tmp <- pbmc.hashtag[[j]]
+        tmp@meta.data <- tmp@meta.data[,!grepl("HTO|hash", colnames(tmp@meta.data))]
+        tmp[["mito.genes"]] <- PercentageFeatureSet(tmp, pattern = "^MT-")
+        tmp[["ribo.genes"]] <- PercentageFeatureSet(tmp, pattern = "^RPS|RPL-")
+        tmp <- RenameCells(tmp, new.names = paste0(tmp$orig.ident[i], "_", rownames(tmp[[]])))
+    
+        VlnPlot(object = tmp, 
+                features = c("nCount_RNA", "nFeature_RNA", "mito.genes", "ribo.genes"), 
+                pt.size = 0) + 
+          theme(legend.position = "none") + 
+          plot_layout(ncol =2)
+        ggsave(paste0("./qc/", tmp$orig.ident[1], ".pdf"), height = 8, width=8)
+        
+        ###########################
+        #Here is the filtering step
+        ############################
+        standev <- sd(log(tmp$nFeature_RNA))*2.5 #cutting off above standard deviation of 2.5
+        mean <- mean(log(tmp$nFeature_RNA))
+        cut <- round(exp(standev+mean))
+        tmp <- subset(tmp, subset = mito.genes < 10 & nFeature_RNA < cut)
+        
+        ###########################################
+        #Estimate Doublets for Each Sequencing Run
+        ############################################
+        sce <- as.SingleCellExperiment(tmp)
+        sce <- scDblFinder(sce, BPPARAM=MulticoreParam(3))
+        doublets <- data.frame(db.class = sce$scDblFinder.class, db.score = sce$scDblFinder.score)
+        rownames(doublets) <- rownames(sce@colData)
+        tmp <- AddMetaData(tmp, doublets)
+        
+    ###########################################
+    #Seurat Azimuth Annotation
+    ############################################
+        tmp <- NormalizeData(tmp, verbose = FALSE)
+        tmp <- ScaleData(tmp, verbose = FALSE)
+        VariableFeatures(tmp) <- getTopHVGs(as.SingleCellExperiment(tmp), 
+                                            n=2000)
+        tmp <- RunPCA(tmp, verbose = FALSE)
+        tmp<- RunUMAP(tmp, dims = 1:30, verbose = FALSE)
+        tmp <- FindNeighbors(object = tmp, 
+                             features = VariableFeatures(tmp), 
+                             verbose = FALSE)
+       
+       tmp <- RunAzimuth(tmp, 
+                          reference = "pbmcref",
+                          verbose = FALSE)
+        #############################################
+        #Singler Annotation of Cell Types
+        #############################################
+         
+      com.res1 <- SingleR(sce, ref=HPCA, labels=HPCA$label.fine, assay.type.test=1)
+    
+      df <- data.frame("labels" = com.res1$labels, "pruned.labels" = com.res1$pruned.labels)
+      rownames(df) <- rownames(com.res1)
+      colnames(df) <- paste0("HPCA.", colnames(df))
+      tmp <- AddMetaData(tmp,  df)
+    
+      
+      com.res2 <- SingleR(sce, ref=Monaco, labels=Monaco$label.fine, assay.type.test=1)
+      df <- data.frame("labels" = com.res2$labels, "pruned.labels" = com.res2$pruned.labels)
+      rownames(df) <- rownames(com.res1)
+      colnames(df) <- paste0("Monaco.", colnames(df))
+      tmp <- AddMetaData(tmp,  df)
+      rm(df)
+      rm(sce)
+          
+      ######################################
+      #Adding TCR clonotypes
+      ######################################
+        
+        combinedObject <- combineTCR(TCR.file, 
+                                     samples = tmp$orig.ident[1], 
+                                     filterMulti = TRUE)
+        tmp <- combineExpression(combinedObject, tmp, cloneCall = "aa")
+    
+      #################################
+      #Saving Preliminary Seurat Object
+      #################################
+      saveRDS(tmp, paste0("~/Documents/GitHub/utility/data/processedData/seuratObjects/", tmp$orig.ident[1], ".rds"))
+    
+    }
+}
+```
+

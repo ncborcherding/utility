@@ -26,6 +26,7 @@ suppressPackageStartupMessages(library(Azimuth))
 suppressPackageStartupMessages(library(SeuratData))
 suppressPackageStartupMessages(library(scran))
 suppressPackageStartupMessages(library(patchwork))
+suppressPackageStartupMessages(library(stringr))
 ```
 
 
@@ -39,10 +40,15 @@ dat <- readRDS("GSE123814.rds")
 list <- SplitObject(dat, split.by = "orig.ident")
 
 for (i in seq_along(list)){
-    tmp <-UpdateSeuratObject(list[[i]])
+    tmp <- UpdateSeuratObject(list[[i]])
     tmp <- subset(tmp, subset = nFeature_RNA > 100) #filter out low count/feature cells\
     
     orig.ident <- names(list)[i]
+    orig.ident <- paste0(substring(orig.ident, 1,2), ".", substring(orig.ident, 3,3), ".", substring(orig.ident, 4, nchar(orig.ident)))
+    
+    barcodes <- paste0(orig.ident, "_", str_split(rownames(tmp[[]]), "_", simplify = TRUE)[,2])
+    tmp <- RenameCells(tmp, new.names = barcodes)
+    tmp$barcode <- rownames(tmp[[]])
 
     tmp[["mito.genes"]] <- PercentageFeatureSet(tmp, pattern = "^MT-")
     tmp[["ribo.genes"]] <- PercentageFeatureSet(tmp, pattern = "^RPS|RPL-")
@@ -58,19 +64,11 @@ for (i in seq_along(list)){
     ###########################
     #Here is the filtering step
     ############################
-    standev <- sd(log(tmp$nFeature_RNA))*2.5 #cutting off above standard deviation of 2.5
-    mean <- mean(log(tmp$nFeature_RNA))
-    cut <- round(exp(standev+mean))
-    tmp <- subset(tmp, subset = mito.genes < 10 & nFeature_RNA < cut)
-    
-  
-    ###########################
-    #Here is the filtering step
-    ############################
-    standev <- sd(log(tmp$nFeature_RNA))*2.5 #cutting off above standard deviation of 2.5
-    mean <- mean(log(tmp$nFeature_RNA))
-    cut <- round(exp(standev+mean))
-    tmp <- subset(tmp, subset = mito.genes < 10 & nFeature_RNA < cut)
+    ###### Already been filtered ########
+    #standev <- sd(log(tmp$nFeature_RNA))*2.5 #cutting off above standard deviation of 2.5
+    #mean <- mean(log(tmp$nFeature_RNA))
+    #cut <- round(exp(standev+mean))
+    #tmp <- subset(tmp, subset = mito.genes < 10 & nFeature_RNA < cut)
     
     ###########################################
     #Estimate Doublets for Each Sequencing Run
@@ -91,6 +89,16 @@ for (i in seq_along(list)){
     rownames(doublets) <- rownames(sce@colData)
     tmp <- AddMetaData(tmp, doublets)
 
+    
+   if(orig.ident %in% c("SC.T.3.1", "BC.T.1.2", "BC.T.2.3")) {
+     tmp$predicted.celltype.l1.score <- NA
+     tmp$predicted.celltype.l1 <- NA 
+     tmp$predicted.celltype.l2.score <- NA
+     tmp$predicted.celltype.l2 <- NA
+     tmp$predicted.celltype.l3.score <- NA
+     tmp$predicted.celltype.l3 <- NA
+     tmp$mapping.score <- NA
+   } else {
     ###########################################
     #Seurat Azimuth Annotation
     ############################################
@@ -103,10 +111,10 @@ for (i in seq_along(list)){
     tmp <- FindNeighbors(object = tmp, 
                          features = VariableFeatures(tmp), 
                          verbose = FALSE)
-   
     tmp <- RunAzimuth(tmp, 
                       reference = "pbmcref",
                       verbose = FALSE)
+   }
       
     #############################################
     #Singler Annotation of Cell Types
@@ -127,35 +135,45 @@ for (i in seq_along(list)){
     rm(df)
     rm(sce)
     
-   processed.data <- tmp[[]] %>%
-                        na.omit() %>%
+   processed.data <- tmp@meta.data[which(!is.na(tmp$CTaa)),] %>%
                         group_by(CTaa) %>%
                         mutate(clonalFrequency = n()) %>%
                         ungroup() %>%
                         mutate(clonalProportion = clonalFrequency / sum(clonalFrequency)) %>%
                         as.data.frame()
    
-   rownames(processed.data) <- processed.data$barcode
-   
-   cloneSize=c(None = 0, Rare = 1e-4, Small = 0.001, 
-             Medium = 0.01, Large = 0.1, Hyperexpanded = 1)
-
-
-    processed.data$cloneSize <- NA
-    
-    for (x in seq_along(cloneSize)) { names(cloneSize)[x] <- 
-              paste0(names(cloneSize[x]), ' (', cloneSize[x-1], ' < X <= ', cloneSize[x], ')') 
-    }
-
-
-
-    for (y in 2:length(cloneSize)) { 
-      processed.data$cloneSize <- ifelse(processed.data$clonalProportion > cloneSize[y-1] & processed.data$clonalProportion <= cloneSize[y], names(cloneSize[y]), processed.data$cloneSize) 
-    }
-
-      processed.data <- processed.data[,c("CTgene", "CTnt", "CTaa", "CTstrict", "clonalFrequency", "clonalProportion", "cloneSize")]
+   if(nrow(processed.data) > 0) {
+     rownames(processed.data) <- processed.data$barcode
+     
+     cloneSize=c(None = 0, Rare = 1e-4, Small = 0.001, 
+               Medium = 0.01, Large = 0.1, Hyperexpanded = 1)
+  
+  
+      processed.data$cloneSize <- NA
       
-      tmp <- AddMetaData(tmp, processed.data)
+      for (x in seq_along(cloneSize)) { names(cloneSize)[x] <- 
+                paste0(names(cloneSize[x]), ' (', cloneSize[x-1], ' < X <= ', cloneSize[x], ')') 
+      }
+  
+  
+  
+      for (y in 2:length(cloneSize)) { 
+        processed.data$cloneSize <- ifelse(processed.data$clonalProportion > cloneSize[y-1] & processed.data$clonalProportion <= cloneSize[y], names(cloneSize[y]), processed.data$cloneSize) 
+      }
+  
+        processed.data <- processed.data[,c("CTgene", "CTnt", "CTaa", "CTstrict", "clonalFrequency", "clonalProportion", "cloneSize")]
+        tmp <- AddMetaData(tmp, processed.data)
+   } else {
+     tmp$CTgene <- NA
+     tmp$CTaa <- NA
+     tmp$CTnt <- NA
+     tmp$CTstrict <- NA
+     tmp$clonalFrequency <- NA
+     tmp$clonalProportion <- NA
+     tmp$cloneSize <- NA
+   }
+      
+      
       tmp@meta.data <- tmp[[]][,c("orig.ident", "nCount_RNA", "nFeature_RNA", "mito.genes", "ribo.genes", "CTgene",  "CTnt", "CTaa", "CTstrict",  "clonalFrequency", "clonalProportion", "cloneSize", "db.class", "db.score", "predicted.celltype.l1.score", "predicted.celltype.l1", "predicted.celltype.l2.score", "predicted.celltype.l2", "predicted.celltype.l3.score", "predicted.celltype.l3", "mapping.score", "HPCA.labels", "HPCA.pruned.labels", "Monaco.labels", "Monaco.pruned.labels")]
   
       tmp <- DietSeurat(tmp)
@@ -169,8 +187,6 @@ for (i in seq_along(list)){
       saveRDS(tmp, paste0("~/Documents/GitHub/utility/data/processedData/seuratObjects/", orig.ident, ".rds"))
       rm(tmp)
       gc()
-    
-  
 }
 ```
 
