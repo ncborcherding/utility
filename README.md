@@ -2,7 +2,7 @@
 
 ## Comprehensive collection of Single-Cell Tumor-Infiltrating Lymphocyte Data
 
-<img align="right" src="https://www.borch.dev/uploads/screpertoire/reference/figures/utility_hex.png" width="305" height="352">
+<img align="right" src="https://github.com/ncborcherding/utility/blob/dev/www/utility_hex.png" width="305" height="352">
 
 ### Introduction
 The original intent of assembling a data set of publicly-available tumor-infiltrating T cells (TILs) with paired TCR sequencing was to expand 
