@@ -4,3 +4,6 @@
 *.rds
 *.Icon
 *.mtx
+*.csv
+*.h5
+*.pdf
