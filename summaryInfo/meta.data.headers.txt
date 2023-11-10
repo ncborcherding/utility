@@ -1,4 +1,4 @@
-Columns	Summary
+Column	Summary
 orig.ident			Combination of tumor and tissue type as unique identifier
 nCount_RNA			summary of counts
 nFeature_RNA			summary of features
@@ -10,8 +10,10 @@ HPCA.labels			SingleR output using HPCA reference
 HPCA.pruned.labels		SingleR output using HPCA reference
 Monaco.labels			SingleR output using Monaco reference
 Monaco.pruned.labels		SingleR output using Monaco reference
-predicted.celltype.l1.score	Azimuth output using pbmcref data setpredicted.celltype.l1		Azimuth output using pbmcref data set     predicted.celltype.l2.score	Azimuth output using pbmcref data set
-predicted.celltype.l2		Azimuth output using pbmcref data set      predicted.celltype.l3.score	Azimuth output using pbmcref data set
+predicted.celltype.l1.score	Azimuth output using pbmcref data set
+predicted.celltype.l1		Azimuth output using pbmcref data set     predicted.celltype.l2.score	Azimuth output using pbmcref data set
+predicted.celltype.l2		Azimuth output using pbmcref data set      
+predicted.celltype.l3.score	Azimuth output using pbmcref data set
 predicted.celltype.l3		Azimuth output using pbmcref data set
 mapping.score			Azimuth output using pbmcref data set  
 CTgene				Clonotype by TCRA_TCRB genes
