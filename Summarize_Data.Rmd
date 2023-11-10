@@ -27,7 +27,7 @@ suppressPackageStartupMessages(library(stringr))
 ## Load, filter and combine Data
 ```{r include=FALSE}
 "%!in%" <- Negate("%in%")
-full.data <- unique(list.files("./data/processedData/individualSeurat/rds", pattern = ".rds"))
+full.data <- unique(list.files("./data/processedData/seuratObjects", pattern = ".rds"))
 pt.directory <- readxl::read_xlsx("./summaryInfo/sample.directory.xlsx")
 
 full.data.summary <- matrix(ncol = length(unique(pt.directory$Type)), nrow = length(unique(pt.directory$Cohort)), 0)
@@ -44,7 +44,7 @@ rownames(tcell.tumor.data.summary) <- unique(pt.directory$Tissue)
 
 
 for (i in seq_along(full.data)){
-    tmp <- readRDS(paste0("./data/processedData/individualSeurat/rds/", full.data[i]))
+    tmp <- readRDS(paste0("./data/processedData/seuratObjects/", full.data[i]))
     if (!any(colnames(tmp@meta.data) == "CTaa")) {
       next()
     }
@@ -54,18 +54,9 @@ for (i in seq_along(full.data)){
     full.data.summary[directory.tmp$Cohort, directory.tmp$Type] <- full.data.summary[directory.tmp$Cohort, directory.tmp$Type] + total.cells
     tumor.data.summary[directory.tmp$Tissue, directory.tmp$Type] <- tumor.data.summary[directory.tmp$Tissue, directory.tmp$Type] + total.cells
     
-    colnames.switch <- colnames(tmp[[]])
-    check.1 <- which(colnames.switch == "functional.cluster")
-    check.2 <- which(colnames.switch == "PT.annot")
-    if(length(check.1) > 0) {
-      col.pos <- check.1
-    }else if (length(check.2) > 0) {
-      col.pos <- check.2
-    }
-    full.data.summary
-    tmp$filter <- "No"
     
-    tmp$filter <- ifelse(!is.na(tmp$CTaa) & !is.na(tmp[[]][,col.pos]), "Yes", "No") 
+    
+    tmp$filter <- ifelse(!is.na(tmp$CTaa) & grepl("CD4|CD8|other T",tmp$predicted.celltype.l1), "Yes", "No") 
     
     
     if (length(which(tmp$filter == "Yes")) > 0) {
