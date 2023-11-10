@@ -11,8 +11,10 @@ the data set for everyone, a complete summary of the sequencing runs and the sam
 
 An explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
 
-This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 
-3) iterating through automatic annotation, and 4) adding the TCR information. This information is stored in the meta data of the Seurat objects - an explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
+This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 3) iterating through automatic annotation, 
+and 4) adding the TCR information. This information is stored in the meta data of the Seurat objects - 
+an explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
+
 
 ### Folder Structure
 ```
@@ -23,7 +25,7 @@ This involves several steps 1) loading the respective GE data, 2) harmonizing th
 ├── Summarize_Data.Rmd
 ├── data
 │   ├── SequencingRuns - 10x Outputs
-│	└── processedData - Processed .rds and larger combined cohorts
+│	  └── processedData - Processed .rds and larger combined cohorts
 ├── qc - plots for quality control purposes
 └── summaryInfo
     ├── TcellSummaryTable.csv
@@ -37,6 +39,7 @@ This involves several steps 1) loading the respective GE data, 2) harmonizing th
 ### Sample ID:
 
 <img align="center" src="https://github.com/ncborcherding/utility/blob/dev/www/utility_info.png">
+
 
 #### Cohort Information
 Here is the current list of data sources, the number of cells that passed filtering by tissue type. **Please cite** the data if you are using uTILity.
@@ -89,6 +92,7 @@ Automatic annotation was performed using the singler (v2.2.0) R package ([citati
 The filtered contig annotation T cell receptor (TCR) data for available sequencing runs were loaded into the R global environment. Individual contigs were combined using the combineTCR() function of scRepertoire (v2.0.0) R Package ([citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)). Clonotypes were assigned to barcodes and were multiple duplicate chains for individual cells were filtered to select for the top expressing contig by read count. The clonotype data was then added to the Seurat Object with proportion across individual patients being used to calculate frequency.
 
 #### Session Info
+
 
 Session Info for the initial data processing and analysis can be found [here](https://github.com/ncborcherding/utility/blob/main/summaryInfo/sessionInfo.txt).
 
