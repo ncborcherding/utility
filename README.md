@@ -2,14 +2,12 @@
 
 ## Comprehensive collection of Single-Cell Tumor-Infiltrating Lymphocyte Data
 
-<img align="right" src="https://github.com/ncborcherding/utility/blob/dev/www/utility_hex.png" width="305" height="352">
+<img align="right" src="https://github.com/ncborcherding/utility/blob/main/www/utility_hex.png" width="305" height="352">
 
 ### Introduction
 The original intent of assembling a data set of publicly-available tumor-infiltrating T cells (TILs) with paired TCR sequencing was to expand 
 and improve the [scRepertoire](https://github.com/ncborcherding/scRepertoire) R package. However, after some discussion, we decided to release 
 the data set for everyone, a complete summary of the sequencing runs and the sample information can be found in the meta data of the Seurat object. 
-
-An explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
 
 This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 3) iterating through automatic annotation, 
 and 4) adding the TCR information. This information is stored in the meta data of the Seurat objects - 
@@ -38,7 +36,7 @@ an explanation of each variable is available [here](https://github.com/ncborcher
 
 ### Sample ID:
 
-<img align="center" src="https://github.com/ncborcherding/utility/blob/dev/www/utility_info.png">
+<img align="center" src="https://github.com/ncborcherding/utility/blob/main/www/utility_info.png">
 
 
 #### Cohort Information
