@@ -4,3 +4,17 @@
 *.rds
 *.Icon
 *.mtx
+data/processedData/combinedDataSets/GSE164522/GSE164522_CRLM_LN_expression.csv
+data/processedData/combinedDataSets/GSE164522/GSE164522_CRLM_metadata.csv
+data/processedData/combinedDataSets/GSE164522/GSE164522_CRLM_MN_expression.csv
+data/processedData/combinedDataSets/GSE164522/GSE164522_CRLM_MT_expression.csv
+data/processedData/combinedDataSets/GSE164522/GSE164522_CRLM_PBMC_expression.csv
+data/processedData/combinedDataSets/GSE164522/GSE164522_CRLM_PN_expression.csv
+data/processedData/combinedDataSets/GSE164522/GSE164522_CRLM_PT_expression.csv
+data/processedData/combinedDataSets/GSE164522/GSE164522_vdj_final.csv
+www/Icon
+data/TCRs/Icon
+*.log
+*.pdf
+*.csv
+*.h5

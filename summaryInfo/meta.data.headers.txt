@@ -19,8 +19,8 @@ HPCA.first.labels	SingleR output using HPCA reference
 HPCA.pruned.labels	SingleR output using HPCA reference
 Monaco.labels	SingleR output using Monaco reference
 Monaco.pruned.labels	SingleR output using Monaco reference
-functional.cluster	ProjecTIL output assignment
-functional.cluster.conf	ProjecTIL output proportion of nearest neighbot
+PT.cluster	ProjecTIL output assignment
+PT.cluster.conf	ProjecTIL output proportion of nearest neighbot
 barcode	Duplicate Cell Barcode
 CTgene	Clonotype by TCRA_TCRB genes
 CTnt	Clonotype by TCRA_TCRB cdr3 nucleotide sequences

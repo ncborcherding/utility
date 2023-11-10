@@ -1,4 +1,33 @@
 ##########################
+#Changes to Version 0.0.6
+#########################
+Data Set Changes
+* Added GSE195486, GSE200996, GSE201425, GSE213243
+
+Processing Data Workflow Changes
+* Added deCoupler code for gene network analysis
+* After testing common integration pipelines, added scArches - SCVI integration 
+* Removed old integration code
+
+To Do List:
+* Make central T object with latent dimensions from searches
+* Finalized clustering
+* Annotate clusters
+* Trex Dimensionall Reduction
+
+
+##########################
+#Changes to Version 0.0.5
+#########################
+Data Set Changes
+* Removed intermediate T cell Seurat Objects
+* Added GSE164522
+
+Processing Data Workflow Changes
+* Updated summarizeData to work with absence of defined T cell Seurat Objects 
+
+
+##########################
 #Changes to Version 0.0.4
 #########################
 Data Set Changes
