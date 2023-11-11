@@ -1,17 +1,18 @@
 ---
-title: Processing Combined Data: GSE123813
-author: 
-- name: Nick Borcherding
-  email: ncborch@gmail.com
-  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
-date: "March 3rd, 2022"
-output:
-  BiocStyle::html_document:
-    toc_float: true
-
+title: "Processing Combined Data: GSE123813"
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+output: rmarkdown::html_vignette
+theme: united
+df_print: kable
+vignette: >
+  %\VignetteIndexEntry{Processing Combined Data: GSE123813}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
-```{r}
+# Loading Libraries
+
+```{r eval=FALSE, tidy=FALSE}
 suppressPackageStartupMessages(library(Seurat))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(dplyr))
@@ -28,14 +29,19 @@ suppressPackageStartupMessages(library(scran))
 suppressPackageStartupMessages(library(patchwork))
 suppressPackageStartupMessages(library(stringr))
 ```
-
-
 # Getting Processed Sequencing Runs
 
-```{r}
+```{r eval=FALSE, tidy=FALSE}
+####################
+#Loading Annotations
+####################
+
 HPCA <- HumanPrimaryCellAtlasData()
 Monaco <- MonacoImmuneData()
 
+################################
+#Looping through sequencing runs
+###############################
 dat <- readRDS("GSE123814.rds")
 list <- SplitObject(dat, split.by = "orig.ident")
 

@@ -1,14 +1,13 @@
 ---
-title: uTILity, a collection of publically-available tumor-infiltrating T-cells and other tissue types, v1.
-author: 
-- name: Nick Borcherding
-  email: ncborch@gmail.com
-  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
-date: "November 2nd, 2023"
-output:
-  BiocStyle::html_document:
-    toc_float: true
-
+title: "uTILity: General Data Processing"
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+output: rmarkdown::html_vignette
+theme: united
+df_print: kable
+vignette: >
+  %\VignetteIndexEntry{uTILity: General Data Processing}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r, echo=FALSE, results="hide", message=FALSE}
@@ -20,7 +19,7 @@ library(BiocStyle)
 
 The original intent of assembling a data set of publicly-available tumor-infiltrating T cells (TILs) with paired TCR sequencing was to expand and improve the [scRepertoire](https://github.com/ncborcherding/scRepertoire) R package. However, after some discussion, we decided to release the data set for everyone, a complete summary of the sequencing runs and the sample information can be found in the meta data of the Seurat object.
 
-The code below is the general purpose variant for the vast majority of samples - there are cohorts 
+The code below is the general purpose variant for the vast majority of samples - there are cohorts that need to be de-multiplexed or separated from combined count matrices, these can be found in **/data/processedData/combinedDataSets**.
 
 ## Citation
 
@@ -53,12 +52,6 @@ suppressPackageStartupMessages(library(scran))
 suppressPackageStartupMessages(library(patchwork))
 ```
 
-I also like to set a color palette before I begin - this way all the colors are consistent throughout figures. 
-
-```{r}
-colorblind_vector <- colorRampPalette(viridis_pal(option = "B")(7))
-```
-
 ***
 
 # Loading and Processing the Data
@@ -67,7 +60,7 @@ colorblind_vector <- colorRampPalette(viridis_pal(option = "B")(7))
 ```{r eval=FALSE}
 dir.create("./qc")
 
-file_list <- list.files("./data/SequencingRuns")
+file_list <- list.files("~/Documents/GitHub/utility/data/SequencingRuns")
 
 ###########################
 #Load Annotation Reference
@@ -78,7 +71,7 @@ Monaco <- MonacoImmuneData()
 options(Seurat.object.assay.version = "v5")
 
 for (i in seq_along(file_list)){
-    tmp <-  Read10X(paste0("./data/SequencingRuns/", file_list[i]))
+    tmp <-  Read10X(paste0("~/Documents/GitHub/utility/data/SequencingRuns/", file_list[i]))
     if(inherits(tmp, "list")) {
       tmp <- tmp[[1]]
      # rownames(tmp) <- stringr::str_split(rownames(tmp), "_", simplify = TRUE)[,2]
@@ -104,7 +97,7 @@ for (i in seq_along(file_list)){
             pt.size = 0) + 
       theme(legend.position = "none") + 
       plot_layout(ncol =2)
-    ggsave(paste0("./qc/", file_list[i], ".pdf"), height = 8, width=8)
+    ggsave(paste0("~/Documents/GitHub/utility/outputs/qc/", file_list[i], ".pdf"), height = 8, width=8)
     
     
     ###########################
@@ -166,7 +159,7 @@ for (i in seq_along(file_list)){
     #Adding TCR clonotypes
     ######################################
     
-    TCR.file <- list.files(paste0("./data/SequencingRuns/", file_list[i]), pattern = "annotations")[1]
+    TCR.file <- list.files(paste0("~/Documents/GitHub/utility/data/SequencingRuns/", file_list[i]), pattern = "annotations")[1]
     if(is.na(TCR.file)) {
       SeuratObj$CTaa <- NA
       SeuratObj$CTnt <- NA
@@ -176,7 +169,7 @@ for (i in seq_along(file_list)){
       SeuratObj$clonalFrequency <- NA
       SeuratObj$cloneSize <- NA
     } else {
-      TCR.file <- read.csv(paste0("./data/SequencingRuns/", file_list[i], "/", TCR.file))
+      TCR.file <- read.csv(paste0("~/Documents/GitHub/utility/data/SequencingRuns/", file_list[i], "/", TCR.file))
       combinedObject <- combineTCR(TCR.file, 
                                    samples = file_list[i], 
                                    filterMulti = TRUE)
@@ -195,13 +188,12 @@ for (i in seq_along(file_list)){
     #################################
     #Saving Preliminary Seurat Object
     #################################
-    saveRDS(SeuratObj, paste0("./data/processedData/seuratObjects/", file_list[i], ".rds"))
+    saveRDS(SeuratObj, paste0("~/Documents/GitHub/utility/data/processedData/seuratObjects/", file_list[i], ".rds"))
     rm(SeuratObj)
     rm(tmp)
     gc()
 }
 ```
-
 
 # Conclusions
 
