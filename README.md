@@ -18,10 +18,10 @@ an explanation of each variable is available [here](https://github.com/ncborcher
 ```
 ├── code
 │   ├── Processing_Utility.Rmd - general processing script
-│	└── Summarize_Data.Rmd - script to get summary data
+│   └── Summarize_Data.Rmd - script to get summary data
 ├── data
 │   ├── SequencingRuns - 10x Outputs
-│	└── processedData - Processed .rds and larger combined cohorts
+│   └── processedData - Processed .rds and larger combined cohorts
 ├── NEWS.txt - changes made
 ├── outputs
 │   └── qc - plots for quality control purposes
