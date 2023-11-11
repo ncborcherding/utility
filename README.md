@@ -23,8 +23,9 @@ an explanation of each variable is available [here](https://github.com/ncborcher
 ├── Summarize_Data.Rmd
 ├── data
 │   ├── SequencingRuns - 10x Outputs
-│	  └── processedData - Processed .rds and larger combined cohorts
-├── qc - plots for quality control purposes
+│	└── processedData - Processed .rds and larger combined cohorts
+├── outputs
+│   └── qc - plots for quality control purposes
 └── summaryInfo
     ├── TcellSummaryTable.csv
     ├── cohortSummaryTable.csv
