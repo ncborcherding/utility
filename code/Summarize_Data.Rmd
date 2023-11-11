@@ -27,8 +27,8 @@ suppressPackageStartupMessages(library(stringr))
 ## Load, filter and combine Data
 ```{r include=FALSE}
 "%!in%" <- Negate("%in%")
-full.data <- unique(list.files("./data/processedData/seuratObjects", pattern = ".rds"))
-pt.directory <- readxl::read_xlsx("./summaryInfo/sample.directory.xlsx")
+full.data <- unique(list.files("~/Documents/GitHub/utility/data/processedData/seuratObjects", pattern = ".rds"))
+pt.directory <- readxl::read_xlsx("~/Documents/GitHub/utility/summaryInfo/sample.directory.xlsx")
 
 full.data.summary <- matrix(ncol = length(unique(pt.directory$Type)), nrow = length(unique(pt.directory$Cohort)), 0)
 colnames(full.data.summary) <- unique(pt.directory$Type)
@@ -44,7 +44,7 @@ rownames(tcell.tumor.data.summary) <- unique(pt.directory$Tissue)
 
 
 for (i in seq_along(full.data)){
-    tmp <- readRDS(paste0("./data/processedData/seuratObjects/", full.data[i]))
+    tmp <- readRDS(paste0("~/Documents/GitHub/utility/data/processedData/seuratObjects/", full.data[i]))
     if (!any(colnames(tmp@meta.data) == "CTaa")) {
       next()
     }
@@ -68,7 +68,7 @@ for (i in seq_along(full.data)){
     rm(tmp)
 }
 
-write.csv(full.data.summary, "./summaryInfo/cohortSummaryTable.csv")
-write.csv(tumor.data.summary, "./summaryInfo/tumorSummaryTable.csv")
-write.csv(tcell.tumor.data.summary, "./summaryInfo/TcellSummaryTable.csv")
+write.csv(full.data.summary, "~/Documents/GitHub/utility/summaryInfo/cohortSummaryTable.csv")
+write.csv(tumor.data.summary, "~/Documents/GitHub/utility/summaryInfo/tumorSummaryTable.csv")
+write.csv(tcell.tumor.data.summary, "~/Documents/GitHub/utility/summaryInfo/TcellSummaryTable.csv")
 ```
