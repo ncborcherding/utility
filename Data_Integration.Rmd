@@ -1,0 +1,62 @@
+---
+title: "Integration"
+output: html_document
+date: "2024-03-20"
+---
+
+# Set Up
+
+## Installing scvi-tools
+
+```{r eval = FALSE}
+library(reticulate)
+conda_create("scvi-env")
+conda_install("sci-env", "scvi-tools", pip = TRUE)
+conda_install("sci-env", "scanpy", pip = TRUE)
+```
+
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+#library(reticulate)
+#use_condaenv("scvi-env")
+
+files <- list.files("./data/processedData/seuratObjects/")
+names <- stringr::str_remove_all(files, ".rds")
+
+object.list <- lapply(files[1:100], function(x) {
+                      obj <- readRDS(paste0("./data/processedData/seuratObjects/", x))
+                      LayerData(obj, layer = "data") <- NULL
+                      obj
+})
+
+object.merge <- merge(object.list[[1]], object.list[-1])
+rm(object.list)
+gc()
+
+object.merge  <- NormalizeData(object.merge )
+object.merge  <- FindVariableFeatures(object.merge )
+object.merge  <- ScaleData(object.merge)
+object.merge  <- RunPCA(object.merge, verbose = FALSE)
+
+object.merge <- IntegrateLayers(object.merge,
+                                assay = "RNA",
+                                method = FastMNNIntegration,
+                                new.reduction = "integrated.mnn",
+                                verbose = FALSE)
+
+object.merge <- RunUMAP(object.merge, 
+                        reduction = "integrated.mnn", 
+                        dims = 1:30, 
+                        reduction.name = "umap.mnn")    
+
+DimPlot(
+  object.merge,
+  reduction = "umap.mnn",
+  group.by = c("orig.ident", "predicted.celltype.l1"),
+  combine = FALSE, label.size = 2
+)
+
+FeaturePlot(object.merge, c("CD4", "CD8A", "FOXP3"))
+```
+
