@@ -15,21 +15,68 @@ conda_install("sci-env", "scvi-tools", pip = TRUE)
 conda_install("sci-env", "scanpy", pip = TRUE)
 ```
 
-```{r}
-library(Seurat)
-library(SeuratWrappers)
-#library(reticulate)
-#use_condaenv("scvi-env")
 
+## Finding Initial Features Space for Full Integration
+
+Here I am randomly sampling 20% of the Seurat Objects in order to get the 4000 most variable features. This sampling is across tissues and tumors to make it robust. We will use the features to subset the Seurat Objects towards a full integration.
+
+```{r}
 files <- list.files("./data/processedData/seuratObjects/")
 names <- stringr::str_remove_all(files, ".rds")
 
+set.seed(42)
+sampled <- sample(727, 146)
+files <- files[sampled]
+names <- names[sampled]
+
 object.list <- lapply(files, function(x) {
                       obj <- readRDS(paste0("./data/processedData/seuratObjects/", x))
+                      
                       LayerData(obj, layer = "data") <- NULL
+                      obj@meta.data <- obj[[]][,1:6]
                       obj$orig.ident <- names[x]
                       obj
 })
+gc()
+
+object.merge <- merge(object.list[[1]], object.list[-1])
+rm(object.list)
+gc()
+
+object.merge  <- NormalizeData(object.merge )
+object.merge <- JoinLayers(object.merge)
+object.merge  <- FindVariableFeatures(object.merge, nfeatures = 6000)
+
+features.to.use <- VariableFeatures(object.merge)
+features.to.use <- Ibex::quietBCRgenes(features.to.use)
+features.to.use <- Trex::quietTCRgenes(features.to.use)
+features.to.use <- features.to.use[!grepl("RPS|RPL|LINC|MT-|AC0|AC1|AC2|RP11-|MIR|HB|IGHV", features.to.use)]
+features.to.use <- features.to.use[1:4000]
+
+saveRDS(features.to.use, "./outputs/reference/Overall_featureSpace.rds")
+rm(object.merge)
+gc()
+```
+
+# Integrating All Cells
+
+Now we can take all the Seurat Objects and subset them by the most variable features across presumably the cohort (sampled cohort above).
+
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+
+files <- list.files("./data/processedData/seuratObjects/")
+names <- stringr::str_remove_all(files, ".rds")
+features.to.use <- readRDS("./reference/Overall_featureSpace.rds")
+
+object.list <- lapply(files, function(x) {
+                      obj <- readRDS(paste0("./data/processedData/seuratObjects/", x))
+                      obj <- subset(obj, features = features.to.use)
+                      obj$orig.ident <- names[x]
+                      obj
+})
+gc()
 
 object.merge <- merge(object.list[[1]], object.list[-1])
 rm(object.list)
@@ -39,6 +86,8 @@ object.merge  <- NormalizeData(object.merge )
 object.merge  <- FindVariableFeatures(object.merge )
 object.merge  <- ScaleData(object.merge)
 object.merge  <- RunPCA(object.merge, verbose = FALSE)
+
+
 
 object.merge <- IntegrateLayers(object.merge,
                                 assay = "RNA",
@@ -51,7 +100,10 @@ object.merge <- RunUMAP(object.merge,
                         dims = 1:30, 
                         reduction.name = "umap.mnn") 
 
+
 object.merge$tissue <- stringr::str_split(object.merge$orig.ident, "[.]", simplify = TRUE)[,2]
+
+saveRDS(object.merge, "./data/integratedSeuratObject.rds")
 
 DimPlot(
   object.merge,
@@ -63,6 +115,24 @@ DimPlot(
 
 FeaturePlot(object.merge, c("CD4", "CD8A", "FOXP3"))
 
-saveRDS(object.merge, "./data/integratedSeuratObject.rds")
+
 ```
 
+ ####################
+                      #Filtering Strategy
+                      ###################
+                      #Step 1: Only taking T/NK cells from Automated Annotation
+                      if("predicted.celltype.l1" %in% colnames(obj[[]])) {
+                        obj <- subset(obj, predicted.celltype.l1 %in% c("CD4 T", "CD8 T", "other T", "NK"))
+                      } 
+                      
+                      #Step 2: Only cells with contig data
+                      if("CTaa" %in% colnames(obj[[]])) {
+                        cells <- which(!is.na(obj[[]][,"CTaa"]))
+                        obj <- subset(obj, cells = colnames(obj)[cells])
+                      }
+                      
+                      #Step 3: Only cells estimated to be singlets
+                      if("db.class" %in% colnames(obj[[]])) {
+                        obj <- subset(obj, db.class == "singlet")
+                      }
