@@ -28,13 +28,30 @@ set.seed(42)
 sampled <- sample(727, 146)
 files <- files[sampled]
 names <- names[sampled]
-
+gene.symbols <- HGNChelper::hgnc.table
 object.list <- lapply(files, function(x) {
                       obj <- readRDS(paste0("./data/processedData/seuratObjects/", x))
                       
                       LayerData(obj, layer = "data") <- NULL
                       obj@meta.data <- obj[[]][,1:6]
                       obj$orig.ident <- names[x]
+                      features <- rownames(obj@assays$RNA$counts)
+                      pos <- which(features %in% gene.symbols$Approved.Symbol)
+                      not.pos <- seq_len(length(features))[-pos]
+                      
+                      keep.values <- c()
+                      remove <- c()
+                      for(i in seq_along(not.pos))
+                        if(features[not.pos[i]] %in% gene.symbols$Symbol) {
+                          new.gene <- gene.symbols$Approved.Symbol[gene.symbols$Symbol %in% features[not.pos[i]]]
+                          keep.values <- c(keep.values,new.gene)
+                        } else {
+                          remove <- c(remove,i)
+                        }
+                      not.pos2 <- not.pos[-remove]
+                      
+                      
+                      obj <- subset(obj, features = features)
                       obj
 })
 gc()
@@ -68,7 +85,7 @@ library(SeuratWrappers)
 
 files <- list.files("./data/processedData/seuratObjects/")
 names <- stringr::str_remove_all(files, ".rds")
-features.to.use <- readRDS("./reference/Overall_featureSpace.rds")
+features.to.use <- readRDS("./outputs/reference/Overall_featureSpace.rds")
 
 object.list <- lapply(files, function(x) {
                       obj <- readRDS(paste0("./data/processedData/seuratObjects/", x))
