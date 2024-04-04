@@ -15,12 +15,21 @@ conda_install("sci-env", "scvi-tools", pip = TRUE)
 conda_install("sci-env", "scanpy", pip = TRUE)
 ```
 
+## Loading Libraries and Functions
+
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+
+source("./R/checkAndUpdateGenes.R")
+```
 
 ## Finding Initial Features Space for Full Integration
 
 Here I am randomly sampling 20% of the Seurat Objects in order to get the 4000 most variable features. This sampling is across tissues and tumors to make it robust. We will use the features to subset the Seurat Objects towards a full integration.
 
 ```{r}
+
 files <- list.files("./data/processedData/seuratObjects/")
 names <- stringr::str_remove_all(files, ".rds")
 
@@ -35,23 +44,6 @@ object.list <- lapply(files, function(x) {
                       LayerData(obj, layer = "data") <- NULL
                       obj@meta.data <- obj[[]][,1:6]
                       obj$orig.ident <- names[x]
-                      features <- rownames(obj@assays$RNA$counts)
-                      pos <- which(features %in% gene.symbols$Approved.Symbol)
-                      not.pos <- seq_len(length(features))[-pos]
-                      
-                      keep.values <- c()
-                      remove <- c()
-                      for(i in seq_along(not.pos))
-                        if(features[not.pos[i]] %in% gene.symbols$Symbol) {
-                          new.gene <- gene.symbols$Approved.Symbol[gene.symbols$Symbol %in% features[not.pos[i]]]
-                          keep.values <- c(keep.values,new.gene)
-                        } else {
-                          remove <- c(remove,i)
-                        }
-                      not.pos2 <- not.pos[-remove]
-                      
-                      
-                      obj <- subset(obj, features = features)
                       obj
 })
 gc()
@@ -64,13 +56,22 @@ object.merge  <- NormalizeData(object.merge )
 object.merge <- JoinLayers(object.merge)
 object.merge  <- FindVariableFeatures(object.merge, nfeatures = 6000)
 
+# Removing specific feature sets
 features.to.use <- VariableFeatures(object.merge)
 features.to.use <- Ibex::quietBCRgenes(features.to.use)
 features.to.use <- Trex::quietTCRgenes(features.to.use)
 features.to.use <- features.to.use[!grepl("RPS|RPL|LINC|MT-|AC0|AC1|AC2|RP11-|MIR|HB|IGHV", features.to.use)]
-features.to.use <- features.to.use[1:4000]
 
-saveRDS(features.to.use, "./outputs/reference/Overall_featureSpace.rds")
+# Checking for gene nomenclature issues and removing feature that might be confounding
+updated.features <- checkAndUpdateGenes(features.to.use, gene.symbols = gene.symbols)
+new.features <- updated.features[[1]]
+new.features[which(is.na(new.features))] <- features.to.use[which(is.na(new.features))]
+new.features <- new.features[-which(new.features != features.to.use)]
+
+#Taking the top 4000 features for integration
+new.features <- new.features[1:4000]
+
+saveRDS(new.features, "./outputs/reference/Overall_featureSpace.rds")
 rm(object.merge)
 gc()
 ```
@@ -80,9 +81,6 @@ gc()
 Now we can take all the Seurat Objects and subset them by the most variable features across presumably the cohort (sampled cohort above).
 
 ```{r}
-library(Seurat)
-library(SeuratWrappers)
-
 files <- list.files("./data/processedData/seuratObjects/")
 names <- stringr::str_remove_all(files, ".rds")
 features.to.use <- readRDS("./outputs/reference/Overall_featureSpace.rds")
