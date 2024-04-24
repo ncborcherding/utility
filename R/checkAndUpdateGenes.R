@@ -23,7 +23,7 @@ checkAndUpdateGenes <- function(genes, gene.symbols) {
     } else {
       # Gene not found in either column, add to not.found.genes
       not.found.genes <- c(not.found.genes, gene)
-      updated.genes[i] <- NA  # Mark as NA or keep original, depending on your preference
+      updated.genes[i] <- gene  # Mark as NA or keep original, depending on your preference
     }
   }
   

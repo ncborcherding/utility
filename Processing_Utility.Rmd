@@ -202,6 +202,79 @@ for (i in seq_along(file_list)){
 }
 ```
 
+# Unifying Gene Symbol
+
+As the data itself is combining processed and raw data from various versions of Cell Ranger - there are a number of gene nomenclature issues between cohorts. Here we will update the symbols using HGNC current standard, sum any duplicates and make new objects to save.
+
+```{r}
+library(parallel)
+library(Matrix)
+source("./R/checkAndUpdateGenes.R")
+files <- list.files("./data/processedData/seuratObjects/")
+names <- stringr::str_remove_all(files, ".rds")
+
+for(i in seq_along(files)) {
+    print(paste("Processing sample ",  names[i], " - ", i, " of ", length(names)))
+    obj <- readRDS(paste0("./data/processedData/seuratObjects/", files[i]))
+    obj$orig.ident <- names[i]
+    meta <- obj[[]]
+    
+    updated.features <- checkAndUpdateGenes(rownames(obj), gene.symbols = gene.symbols)
+    new.features <- updated.features[[1]]
+    
+    data <- obj@assays$RNA$count
+  
+  # Sum the rows based on new.features
+  summed_data <- do.call(rbind,
+      lapply(1:ncol(data), function(j) tapply(data[, j], new.features, sum, default = 0))
+  )
+  
+  unique_features <- unique(new.features)
+  dups <- new.features[duplicated(new.features) | duplicated(new.features, fromLast = TRUE)]
+  
+  # Create an empty matrix to hold the summed rows
+  summed_matrix <- Matrix(0, nrow = length(unique_features), ncol = ncol(data), sparse = TRUE)
+  rownames(summed_matrix) <- unique_features
+  colnames(summed_matrix) <- colnames(data)
+  
+  
+  unique_features <- unique(new.features)
+  dups <- new.features[duplicated(new.features) | duplicated(new.features, fromLast = TRUE)]
+  
+  # Set up parallel computing
+  no_cores <- detectCores() - 1  # Leave one core free for system processes
+  cl <- makeCluster(no_cores)
+  clusterExport(cl, list("data", "new.features", "dups", "unique_features", "colSums"))
+  clusterEvalQ(cl, library(Matrix))  # Load Matrix package on each worker
+  
+  # Define function to process each feature
+  process_feature <- function(feature) {
+    rows_to_sum <- which(new.features == feature)
+    if (feature %in% dups) {
+      return(list(feature = feature, sum = colSums(data[rows_to_sum, , drop = FALSE])))
+    } else {
+      return(list(feature = feature, sum = data[rows_to_sum, , drop = FALSE]))
+    }
+  }
+  
+  # Use parallel processing
+  results <- parLapply(cl, unique_features, process_feature)
+  
+  # Stop the cluster
+  stopCluster(cl)
+  
+  for (result in results) {
+    summed_matrix[result$feature, ] <- result$sum
+  }
+  
+  new.obj <- CreateSeuratObject(counts = summed_matrix,
+                                meta.data = meta)
+  saveRDS(new.obj, paste0("~/Desktop/utility.tmp/", files[i]))
+  rm(summed_matrix, results, obj, new.obj, data)
+  gc()
+}
+```
+
 
 # Conclusions
 
