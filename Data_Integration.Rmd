@@ -29,7 +29,6 @@ source("./R/checkAndUpdateGenes.R")
 Here I am randomly sampling 20% of the Seurat Objects in order to get the 4000 most variable features. This sampling is across tissues and tumors to make it robust. We will use the features to subset the Seurat Objects towards a full integration.
 
 ```{r}
-
 files <- list.files("./data/processedData/seuratObjects/")
 names <- stringr::str_remove_all(files, ".rds")
 
@@ -37,9 +36,8 @@ set.seed(42)
 sampled <- sample(727, 146)
 files <- files[sampled]
 names <- names[sampled]
-gene.symbols <- HGNChelper::hgnc.table
-object.list <- lapply(files, function(x) {
-                      obj <- readRDS(paste0("./data/processedData/seuratObjects/", x))
+object.list <- lapply(seq_len(length(files)), function(x) {
+                      obj <- readRDS(paste0("./data/processedData/seuratObjects/", files[x]))
                       
                       LayerData(obj, layer = "data") <- NULL
                       obj@meta.data <- obj[[]][,1:6]
@@ -62,16 +60,10 @@ features.to.use <- Ibex::quietBCRgenes(features.to.use)
 features.to.use <- Trex::quietTCRgenes(features.to.use)
 features.to.use <- features.to.use[!grepl("RPS|RPL|LINC|MT-|AC0|AC1|AC2|RP11-|MIR|HB|IGHV", features.to.use)]
 
-# Checking for gene nomenclature issues and removing feature that might be confounding
-updated.features <- checkAndUpdateGenes(features.to.use, gene.symbols = gene.symbols)
-new.features <- updated.features[[1]]
-new.features[which(is.na(new.features))] <- features.to.use[which(is.na(new.features))]
-new.features <- new.features[-which(new.features != features.to.use)]
-
 #Taking the top 4000 features for integration
-new.features <- new.features[1:4000]
+new.features <- features.to.use[1:4000]
 
-saveRDS(new.features, "./outputs/reference/Overall_featureSpace.rds")
+saveRDS(features.to.use, "./outputs/reference/Overall_featureSpace.rds")
 rm(object.merge)
 gc()
 ```
@@ -85,8 +77,8 @@ files <- list.files("./data/processedData/seuratObjects/")
 names <- stringr::str_remove_all(files, ".rds")
 features.to.use <- readRDS("./outputs/reference/Overall_featureSpace.rds")
 
-object.list <- lapply(files, function(x) {
-                      obj <- readRDS(paste0("./data/processedData/seuratObjects/", x))
+object.list <- lapply(seq_len(length(files)), function(x) {
+                      obj <- readRDS(paste0("./data/processedData/seuratObjects/", files[x]))
                       obj <- subset(obj, features = features.to.use)
                       obj$orig.ident <- names[x]
                       obj
@@ -96,29 +88,24 @@ gc()
 object.merge <- merge(object.list[[1]], object.list[-1])
 rm(object.list)
 gc()
-
+object.merge <- JoinLayers(object.merge)
 object.merge  <- NormalizeData(object.merge )
-object.merge  <- FindVariableFeatures(object.merge )
+object.merge <- FindVariableFeatures(object.merge, nfeatures = 2000)
 object.merge  <- ScaleData(object.merge)
-object.merge  <- RunPCA(object.merge, verbose = FALSE)
+object.merge  <- RunPCA(object.merge, 
+                        verbose = FALSE)
+saveRDS(object.merge, "./data/integratedSeuratObject.rds")
 
-
-
-object.merge <- IntegrateLayers(object.merge,
-                                assay = "RNA",
-                                method = FastMNNIntegration,
-                                new.reduction = "integrated.mnn",
-                                verbose = FALSE)
-
-object.merge <- RunUMAP(object.merge, 
-                        reduction = "integrated.mnn", 
-                        dims = 1:30, 
-                        reduction.name = "umap.mnn") 
-
-
-object.merge$tissue <- stringr::str_split(object.merge$orig.ident, "[.]", simplify = TRUE)[,2]
+object.merge <- RunHarmony(object.merge, "orig.ident")
 
 saveRDS(object.merge, "./data/integratedSeuratObject.rds")
+
+object.merge <- RunUMAP(object.merge, 
+                        reduction = "harmony", 
+                        dims = 1:30, 
+                        reduction.name = "umap.harmony") 
+
+object.merge$tissue <- stringr::str_split(object.merge$orig.ident, "[.]", simplify = TRUE)[,2]
 
 DimPlot(
   object.merge,
