@@ -8,64 +8,15 @@ date: "2024-03-20"
 
 ## Installing scvi-tools
 
-```{r eval = FALSE}
-library(reticulate)
-conda_create("scvi-env")
-conda_install("sci-env", "scvi-tools", pip = TRUE)
-conda_install("sci-env", "scanpy", pip = TRUE)
-```
 
 ## Loading Libraries and Functions
 
 ```{r}
+library(BPCells)
+library(cluster)
+library(reticulate)
 library(Seurat)
 library(SeuratWrappers)
-
-source("./R/checkAndUpdateGenes.R")
-```
-
-## Finding Initial Features Space for Full Integration
-
-Here I am randomly sampling 20% of the Seurat Objects in order to get the 4000 most variable features. This sampling is across tissues and tumors to make it robust. We will use the features to subset the Seurat Objects towards a full integration.
-
-```{r}
-files <- list.files("./data/processedData/seuratObjects/")
-names <- stringr::str_remove_all(files, ".rds")
-
-set.seed(42)
-sampled <- sample(727, 146)
-files <- files[sampled]
-names <- names[sampled]
-object.list <- lapply(seq_len(length(files)), function(x) {
-                      obj <- readRDS(paste0("./data/processedData/seuratObjects/", files[x]))
-                      
-                      LayerData(obj, layer = "data") <- NULL
-                      obj@meta.data <- obj[[]][,1:6]
-                      obj$orig.ident <- names[x]
-                      obj
-})
-gc()
-
-object.merge <- merge(object.list[[1]], object.list[-1])
-rm(object.list)
-gc()
-
-object.merge  <- NormalizeData(object.merge )
-object.merge <- JoinLayers(object.merge)
-object.merge  <- FindVariableFeatures(object.merge, nfeatures = 6000)
-
-# Removing specific feature sets
-features.to.use <- VariableFeatures(object.merge)
-features.to.use <- Ibex::quietBCRgenes(features.to.use)
-features.to.use <- Trex::quietTCRgenes(features.to.use)
-features.to.use <- features.to.use[!grepl("RPS|RPL|LINC|MT-|AC0|AC1|AC2|RP11-|MIR|HB|IGHV", features.to.use)]
-
-#Taking the top 4000 features for integration
-new.features <- features.to.use[1:4000]
-
-saveRDS(features.to.use, "./outputs/reference/Overall_featureSpace.rds")
-rm(object.merge)
-gc()
 ```
 
 # Integrating All Cells with BPCells and scVI
@@ -86,34 +37,44 @@ if (!dir.exists(bp_dir)) {
 # 2. Load feature space and file list
 files <- list.files("./data/processedData/seuratObjects/")
 names <- stringr::str_remove_all(files, ".rds")
-features.to.use <- readRDS("./outputs/reference/Overall_featureSpace.rds")
 
 # 3. Process objects one-by-one and convert to BPCells format
-# This loop reads each Seurat object, applies initial filtering, subsets to
-# the common feature space, and then writes the count matrix to an on-disk
-# BPCells matrix. This avoids loading all data into RAM at once.
-object.list <- lapply(seq_len(length(files)), function(x) {
-    cat("Processing:", files[x], "\n")
+# This loop reads each Seurat object, applies initial filtering,
+# and then writes the count matrix to an on-disk BPCells matrix. 
+# This avoids loading all data into RAM at once.
+object.list <- list()
+for(x in seq_len(length(names))) {
     obj <- readRDS(paste0("./data/processedData/seuratObjects/", files[x]))
 
     # Apply filtering strategy from the original script to reduce object size
     # Step 1: Only taking T/NK cells from Automated Annotation
     if("predicted.celltype.l1" %in% colnames(obj[[]])) {
+      if(any(grepl("CD4 T|CD8 T|other T|NK", obj$predicted.celltype.l1))) {
         obj <- subset(obj, predicted.celltype.l1 %in% c("CD4 T", "CD8 T", "other T", "NK"))
+      } else {
+        next()
+      }
     }
     # Step 2: Only cells with contig data
     if("CTaa" %in% colnames(obj[[]])) {
         cells <- which(!is.na(obj[[]][,"CTaa"]))
-        obj <- subset(obj, cells = colnames(obj)[cells])
+        if(length(cells) == 0) {
+          next()
+        } else {
+          obj <- subset(obj, cells = colnames(obj)[cells])
+        }
     }
     # Step 3: Only cells estimated to be singlets
     if("db.class" %in% colnames(obj[[]])) {
+      if(ncol(obj) == 0) {
+          next()
+        } else {
         obj <- subset(obj, db.class == "singlet")
+        }
     }
-
-    # Intersect features to ensure no errors from missing features
-    current_features <- intersect(features.to.use, rownames(obj))
-    obj <- subset(obj, features = current_features)
+    if(ncol(obj) == 0) {
+          next()
+    } 
     obj$orig.ident <- names[x]
 
     # Write the counts to a BPCells-backed matrix
@@ -129,19 +90,16 @@ object.list <- lapply(seq_len(length(files)), function(x) {
         counts = BPCells::open_matrix_dir(dir = bp_path),
         meta.data = obj[[]]
     )
-    obj_bp@assays$RNA@layers$counts@dimnames[[1]] <- current_features
+    
+    object.list[[names[x]]] <- obj_bp
 
     # Clean up memory
-    rm(obj)
+    rm(obj, obj_bp)
     gc()
+}
 
-    return(obj_bp)
-})
-gc()
 
 # 4. Integrate using scVI
-# RunScviIntegration is a scalable integration method that replaces the
-# memory-intensive `merge` and `RunHarmony` steps.
 object.integrated <- SeuratWrappers::RunScviIntegration(
   object.list,
   assay = "RNA",
@@ -160,7 +118,9 @@ object.integrated <- RunUMAP(object.integrated,
                              reduction.name = "umap.scvi")
 
 # Add tissue metadata
-object.integrated$tissue <- stringr::str_split(object.integrated$orig.ident, "[.]", simplify = TRUE)[,2]
+object.integrated$tissue <- stringr::str_split(object.integrated$orig.ident, 
+                                               "[.]", 
+                                               simplify = TRUE)[,2]
 
 # Save the final, memory-efficient, and well-integrated object
 saveRDS(object.integrated, "./data/integratedSeuratObject_scVI.rds")
@@ -176,7 +136,9 @@ DimPlot(
 )
 
 # Visualize expression of key marker genes on the new UMAP
-FeaturePlot(object.integrated, c("CD4", "CD8A", "FOXP3"), reduction = "umap.scvi")
+FeaturePlot(object.integrated, 
+            features = c("CD4", "CD8A", "FOXP3"), 
+            reduction = "umap.scvi")
 
 ```
 
@@ -185,14 +147,12 @@ FeaturePlot(object.integrated, c("CD4", "CD8A", "FOXP3"), reduction = "umap.scvi
 This section performs cell clustering using the Leiden algorithm, which is a fast and high-quality community detection algorithm. To determine the optimal clustering granularity, we systematically test a range of resolution parameters. The best resolution is selected by finding the one that maximizes the average silhouette width, a measure of cluster cohesion and separation.
 
 ```{r}
-# Load required library for silhouette scoring
-# Ensure the 'cluster' package is installed: install.packages('cluster')
-library(cluster)
-
 # 1. Find Neighbors
 # This step builds a Shared Nearest Neighbor (SNN) graph, which is required for clustering.
 # We use the 'scvi' reduction which represents the integrated data space.
-object.integrated <- FindNeighbors(object.integrated, reduction = "scvi", dims = 1:30)
+object.integrated <- FindNeighbors(object.integrated, 
+                                   reduction = "scvi", 
+                                   dims = 1:30)
 
 # 2. Evaluate Clustering Resolutions
 # We will test a range of resolutions for the Leiden algorithm to find the one
@@ -206,7 +166,10 @@ silhouette_scores <- c()
 for (res in resolutions) {
     cat("Testing resolution:", res, "\n")
     # Run Leiden clustering
-    object.integrated <- FindClusters(object.integrated, resolution = res, algorithm.name = "leiden", verbose = FALSE)
+    object.integrated <- FindClusters(object.integrated, 
+                                      resolution = res, 
+                                      algorithm.name = "leiden", 
+                                      verbose = FALSE)
 
     # Calculate silhouette score
     # Note: This can be computationally intensive on large datasets.
@@ -248,24 +211,4 @@ DimPlot(object.integrated, reduction = "umap.scvi", group.by = "leiden_clusters"
 
 # Save the final object with clustering information
 saveRDS(object.integrated, "./data/integratedSeuratObject_scVI_clustered.rds")
-
 ```
-
- ####################
-                      #Filtering Strategy
-                      ###################
-                      #Step 1: Only taking T/NK cells from Automated Annotation
-                      if("predicted.celltype.l1" %in% colnames(obj[[]])) {
-                        obj <- subset(obj, predicted.celltype.l1 %in% c("CD4 T", "CD8 T", "other T", "NK"))
-                      } 
-                      
-                      #Step 2: Only cells with contig data
-                      if("CTaa" %in% colnames(obj[[]])) {
-                        cells <- which(!is.na(obj[[]][,"CTaa"]))
-                        obj <- subset(obj, cells = colnames(obj)[cells])
-                      }
-                      
-                      #Step 3: Only cells estimated to be singlets
-                      if("db.class" %in% colnames(obj[[]])) {
-                        obj <- subset(obj, db.class == "singlet")
-                      }
