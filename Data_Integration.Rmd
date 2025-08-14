@@ -24,8 +24,7 @@ library(SeuratWrappers)
 Now we can take all the Seurat Objects and integrate them. The following code has been optimized for memory efficiency and scalability. It uses `BPCells` to store the count matrices on disk, avoiding the need to load the entire dataset into RAM. It then uses `scVI` for integration, which is more scalable than traditional methods like Harmony or MNN. The raw count matrices are first filtered and subset to a common feature space before being converted to the `BPCells` format.
 
 ```{r}
-# This chunk refactors the integration process to be more memory-efficient
-# and scalable. It uses BPCells to store data on-disk and scVI for integration.
+# This chunk uses BPCells to store data on-disk and scVI for integration.
 
 # 1. Setup BPCells directory
 # Create a directory to store the on-disk BPCells matrices
@@ -42,64 +41,74 @@ names <- stringr::str_remove_all(files, ".rds")
 # This loop reads each Seurat object, applies initial filtering,
 # and then writes the count matrix to an on-disk BPCells matrix. 
 # This avoids loading all data into RAM at once.
-object.list <- list()
 for(x in seq_len(length(names))) {
+    
+    # Define paths for this sample
+    sample_name <- names[x]
+    bp_path <- file.path(bp_dir, sample_name)
+    meta_path <- file.path(bp_dir, paste0(sample_name, "_meta.rds"))
+
+    # If both the BPCells directory and metadata file exist, skip to the next sample.
+    if (dir.exists(bp_path) && file.exists(meta_path)) {
+        message(paste("Skipping already processed sample:", sample_name))
+        next()
+    }
     obj <- readRDS(paste0("./data/processedData/seuratObjects/", files[x]))
 
-    # Apply filtering strategy from the original script to reduce object size
-    # Step 1: Only taking T/NK cells from Automated Annotation
+    # Apply filtering strategy (no changes here)
     if("predicted.celltype.l1" %in% colnames(obj[[]])) {
       if(any(grepl("CD4 T|CD8 T|other T|NK", obj$predicted.celltype.l1))) {
         obj <- subset(obj, predicted.celltype.l1 %in% c("CD4 T", "CD8 T", "other T", "NK"))
-      } else {
-        next()
-      }
+      } else { next() }
     }
-    # Step 2: Only cells with contig data
     if("CTaa" %in% colnames(obj[[]])) {
         cells <- which(!is.na(obj[[]][,"CTaa"]))
-        if(length(cells) == 0) {
-          next()
-        } else {
-          obj <- subset(obj, cells = colnames(obj)[cells])
-        }
+        if(length(cells) == 0) { next() } 
+        else { obj <- subset(obj, cells = colnames(obj)[cells]) }
     }
-    # Step 3: Only cells estimated to be singlets
     if("db.class" %in% colnames(obj[[]])) {
-      if(ncol(obj) == 0) {
-          next()
-        } else {
-        obj <- subset(obj, db.class == "singlet")
-        }
+        if(ncol(obj) == 0) { next() } 
+        else { obj <- subset(obj, db.class == "singlet") }
     }
-    if(ncol(obj) == 0) {
-          next()
-    } 
-    obj$orig.ident <- names[x]
+    if(ncol(obj) <= 1) { next() }
+    
+    obj$orig.ident <- sample_name
 
-    # Write the counts to a BPCells-backed matrix
-    # This is the key step for memory efficiency
-    bp_path <- file.path(bp_dir, names[x])
+    # Write the BPCells matrix to disk
     BPCells::write_matrix_dir(
         mat = obj@assays$RNA@layers$counts,
         dir = bp_path
     )
-
-    # Create a new Seurat object with the on-disk matrix
-    obj_bp <- Seurat::CreateSeuratObject(
-        counts = BPCells::open_matrix_dir(dir = bp_path),
-        meta.data = obj[[]]
-    )
     
-    object.list[[names[x]]] <- obj_bp
+    # Save the filtered metadata to disk instead of holding it in memory
+    saveRDS(obj[[]], file = meta_path)
 
     # Clean up memory
-    rm(obj, obj_bp)
+    rm(obj)
     gc()
 }
 
+# 4. Build the list of Seurat objects from disk
+processed_names <- list.dirs(bp_dir, full.names = FALSE, recursive = FALSE)
 
-# 4. Integrate using scVI
+object.list <- lapply(processed_names, function(p_name) {
+    bp_path <- file.path(bp_dir, p_name)
+    meta_path <- file.path(bp_dir, paste0(p_name, "_meta.rds"))
+
+    # Create the Seurat object from the on-disk components
+    Seurat::CreateSeuratObject(
+        counts = BPCells::open_matrix_dir(dir = bp_path),
+        meta.data = readRDS(meta_path)
+    )
+})
+# Name the list for easy access
+names(object.list) <- processed_names
+
+
+# 5. Identify features to integrate
+
+
+# 6. Integrate using scVI
 object.integrated <- SeuratWrappers::RunScviIntegration(
   object.list,
   assay = "RNA",
@@ -109,7 +118,7 @@ object.integrated <- SeuratWrappers::RunScviIntegration(
 rm(object.list)
 gc()
 
-# The object is now integrated. The default assay is now `integrated`.
+# 7. Dimensional Reduction
 # We can proceed with downstream analysis like PCA and UMAP on the integrated data.
 object.integrated <- RunPCA(object.integrated, npcs = 30, verbose = FALSE)
 object.integrated <- RunUMAP(object.integrated,
@@ -125,7 +134,7 @@ object.integrated$tissue <- stringr::str_split(object.integrated$orig.ident,
 # Save the final, memory-efficient, and well-integrated object
 saveRDS(object.integrated, "./data/integratedSeuratObject_scVI.rds")
 
-# 5. Visualize the results
+# 8. Visualize the results
 # Visualize the UMAP, grouping by different metadata columns to assess integration
 DimPlot(
   object.integrated,
