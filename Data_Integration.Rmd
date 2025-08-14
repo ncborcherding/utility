@@ -17,6 +17,9 @@ library(cluster)
 library(reticulate)
 library(Seurat)
 library(SeuratWrappers)
+library(SingleCellExperiment)
+
+use_python("~/.virtualenvs/r-keras/bin/python", required = TRUE)
 ```
 
 # Integrating All Cells with BPCells and scVI
@@ -41,80 +44,116 @@ names <- stringr::str_remove_all(files, ".rds")
 # This loop reads each Seurat object, applies initial filtering,
 # and then writes the count matrix to an on-disk BPCells matrix. 
 # This avoids loading all data into RAM at once.
-for(x in seq_len(length(names))) {
-    
-    # Define paths for this sample
-    sample_name <- names[x]
-    bp_path <- file.path(bp_dir, sample_name)
-    meta_path <- file.path(bp_dir, paste0(sample_name, "_meta.rds"))
+for (x in seq_along(names)) {
+  sample_name <- names[x]
+  bp_path <- file.path(bp_dir, sample_name)
+  meta_path <- file.path(bp_dir, paste0(sample_name, "_meta.rds"))
+  features_path <- file.path(bp_path, "features.rds")
+  barcodes_path <- file.path(bp_path, "barcodes.rds")
 
-    # If both the BPCells directory and metadata file exist, skip to the next sample.
-    if (dir.exists(bp_path) && file.exists(meta_path)) {
-        message(paste("Skipping already processed sample:", sample_name))
-        next()
-    }
-    obj <- readRDS(paste0("./data/processedData/seuratObjects/", files[x]))
+  if (dir.exists(bp_path) && file.exists(meta_path) && file.exists(features_path)) {
+    message("Skipping already processed sample: ", sample_name)
+    next()
+  }
 
-    # Apply filtering strategy (no changes here)
-    if("predicted.celltype.l1" %in% colnames(obj[[]])) {
-      if(any(grepl("CD4 T|CD8 T|other T|NK", obj$predicted.celltype.l1))) {
-        obj <- subset(obj, predicted.celltype.l1 %in% c("CD4 T", "CD8 T", "other T", "NK"))
-      } else { next() }
-    }
-    if("CTaa" %in% colnames(obj[[]])) {
-        cells <- which(!is.na(obj[[]][,"CTaa"]))
-        if(length(cells) == 0) { next() } 
-        else { obj <- subset(obj, cells = colnames(obj)[cells]) }
-    }
-    if("db.class" %in% colnames(obj[[]])) {
-        if(ncol(obj) == 0) { next() } 
-        else { obj <- subset(obj, db.class == "singlet") }
-    }
-    if(ncol(obj) <= 1) { next() }
-    
-    obj$orig.ident <- sample_name
+  obj <- readRDS(paste0("./data/processedData/seuratObjects/", files[x]))
 
-    # Write the BPCells matrix to disk
-    BPCells::write_matrix_dir(
-        mat = obj@assays$RNA@layers$counts,
-        dir = bp_path
-    )
-    
-    # Save the filtered metadata to disk instead of holding it in memory
-    saveRDS(obj[[]], file = meta_path)
+  # Filtering
+  if ("predicted.celltype.l1" %in% colnames(obj[[]])) {
+    if (any(grepl("CD4 T|CD8 T|other T|NK", obj$predicted.celltype.l1))) {
+      obj <- subset(obj, predicted.celltype.l1 %in% c("CD4 T", "CD8 T", "other T", "NK"))
+    } else next()
+  }
+  if ("CTaa" %in% colnames(obj[[]])) {
+    cells <- which(!is.na(obj[[]][, "CTaa"]))
+    if (length(cells) == 0) next()
+    obj <- subset(obj, cells = colnames(obj)[cells])
+  }
+  if ("db.class" %in% colnames(obj[[]])) {
+    if (ncol(obj) == 0) next()
+    obj <- subset(obj, db.class == "singlet")
+  }
+  if (ncol(obj) <= 1) next()
 
-    # Clean up memory
-    rm(obj)
-    gc()
+  obj$orig.ident <- sample_name
+
+  # Write BPCells counts
+  BPCells::write_matrix_dir(mat = obj@assays$RNA@layers$counts, dir = bp_path)
+
+  # Save feature names
+  saveRDS(rownames(obj), file = features_path)
+  
+  # Save feature names
+  saveRDS(colnames(obj), file = barcodes_path)
+
+  # Save metadata
+  saveRDS(obj[[]], file = meta_path)
+
+  rm(obj)
+  gc()
 }
 
 # 4. Build the list of Seurat objects from disk
 processed_names <- list.dirs(bp_dir, full.names = FALSE, recursive = FALSE)
 
 object.list <- lapply(processed_names, function(p_name) {
-    bp_path <- file.path(bp_dir, p_name)
-    meta_path <- file.path(bp_dir, paste0(p_name, "_meta.rds"))
+  bp_path <- file.path(bp_dir, p_name)
+  meta_path <- file.path(bp_dir, paste0(p_name, "_meta.rds"))
+  features_path <- file.path(bp_path, "features.rds")
+  barcodes_path <- file.path(bp_path, "barcodes.rds")
 
-    # Create the Seurat object from the on-disk components
-    Seurat::CreateSeuratObject(
-        counts = BPCells::open_matrix_dir(dir = bp_path),
-        meta.data = readRDS(meta_path)
-    )
+  counts_bp <- BPCells::open_matrix_dir(bp_path)
+  rownames(counts_bp) <- readRDS(features_path)
+  colnames(counts_bp) <- readRDS(barcodes_path)
+
+  Seurat::CreateSeuratObject(
+    counts = counts_bp,
+    meta.data = readRDS(meta_path)
+  )
 })
-# Name the list for easy access
 names(object.list) <- processed_names
 
 
 # 5. Identify features to integrate
+per_sample_stats <- lapply(object.list, function(obj) {
+  counts_bp <- obj@assays$RNA@layers$counts
+  if (is.null(counts_bp)) counts_bp <- obj@assays$RNA@counts
+
+  lib_sizes <- as.numeric(BPCells::colSums(counts_bp))
+  lib_sizes[lib_sizes == 0] <- 1
+  scale_factor <- median(lib_sizes)
+
+  # Normalize (still on disk)
+  norm_bp <- t(t(counts_bp) / lib_sizes) * scale_factor
+
+  # Materialize to sparse matrix before log1p
+  norm_mat <- as(norm_bp, "dgCMatrix")
+  logcounts <- log1p(norm_mat)
+
+  sce <- SingleCellExperiment(assays = list(logcounts = logcounts))
+  diff <- scran::modelGeneVar(sce, assay.type = "logcounts")
+  diff@rownames <- rownames(obj)
+  return(diff)
+})
+
+# Harmonize features across samples
+common_genes <- Reduce(intersect, lapply(per_sample_stats, rownames))
+per_sample_stats <- lapply(per_sample_stats, function(stat) {
+  stat[common_genes, , drop = FALSE]
+})
+
+# Combine variance stats and pick HVGs
+combined_stats <- scran::combineVar(per_sample_stats)
+top_hvg <- scran::getTopHVGs(combined_stats, n = 2035)
+
+#Removing VDJ/Ribosomal/Mitochondrial Genes
+variable.features <- scRepertoire::quietVDJgenes(top_hvg)
+variable.features <- variable.features[!grepl('^RP[SL][[:digit:]]|^RPLP[[:digit:]]|^RPSA|^MT-', 
+                                              variable.features)]
+
+SeuratObj <- merge(object.list[[1]], object.list[-1])
 
 
-# 6. Integrate using scVI
-object.integrated <- SeuratWrappers::RunScviIntegration(
-  object.list,
-  assay = "RNA",
-  reduction = "scvi",
-  scvi_model_path = "./models/scvi/"
-)
 rm(object.list)
 gc()
 
