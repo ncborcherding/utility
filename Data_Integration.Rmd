@@ -6,7 +6,7 @@ date: "2024-03-20"
 
 # Set Up
 
-## Installing scvi-tools
+## Installing Harmony-tools
 
 
 ## Loading Libraries and Functions
@@ -14,20 +14,21 @@ date: "2024-03-20"
 ```{r}
 library(BPCells)
 library(cluster)
+library(future)
+library(future.apply)
+library(patchwork)
 library(reticulate)
 library(Seurat)
 library(SeuratWrappers)
 library(SingleCellExperiment)
-
-use_python("~/.virtualenvs/r-keras/bin/python", required = TRUE)
 ```
 
-# Integrating All Cells with BPCells and scVI
+# Integrating All Cells with BPCells and Harmony
 
-Now we can take all the Seurat Objects and integrate them. The following code has been optimized for memory efficiency and scalability. It uses `BPCells` to store the count matrices on disk, avoiding the need to load the entire dataset into RAM. It then uses `scVI` for integration, which is more scalable than traditional methods like Harmony or MNN. The raw count matrices are first filtered and subset to a common feature space before being converted to the `BPCells` format.
+Now we can take all the Seurat Objects and integrate them. The following code has been optimized for memory efficiency and scalability. It uses `BPCells` to store the count matrices on disk, avoiding the need to load the entire dataset into RAM. It then uses `harmony` for integration. The raw count matrices are first filtered and subset to a common feature space before being converted to the `BPCells` format.
 
 ```{r}
-# This chunk uses BPCells to store data on-disk and scVI for integration.
+# This chunk uses BPCells to store data on-disk and Harmony for integration.
 
 # 1. Setup BPCells directory
 # Create a directory to store the on-disk BPCells matrices
@@ -151,42 +152,54 @@ variable.features <- scRepertoire::quietVDJgenes(top_hvg)
 variable.features <- variable.features[!grepl('^RP[SL][[:digit:]]|^RPLP[[:digit:]]|^RPSA|^MT-', 
                                               variable.features)]
 
+# Forming a Single Seurat Object
 SeuratObj <- merge(object.list[[1]], object.list[-1])
-
-
 rm(object.list)
 gc()
 
+SeuratObj <- SeuratObj %>%
+              NormalizeData(verbose = FALSE) %>%
+              ScaleData(features = variable.features,
+                        verbose = FALSE) %>%
+              RunPCA(verbose = FALSE, 
+                     features = variable.features)
+
+SeuratObj <- IntegrateLayers(
+  object = SeuratObj, 
+  method = HarmonyIntegration,
+  new.reduction = "harmony",
+  verbose = FALSE
+)
+
 # 7. Dimensional Reduction
 # We can proceed with downstream analysis like PCA and UMAP on the integrated data.
-object.integrated <- RunPCA(object.integrated, npcs = 30, verbose = FALSE)
-object.integrated <- RunUMAP(object.integrated,
-                             reduction = "scvi",
-                             dims = 1:30,
-                             reduction.name = "umap.scvi")
+SeuratObj <- RunUMAP(SeuratObj,
+                     reduction = "harmony",
+                     dims = 1:30,
+                     reduction.name = "umap.harmony")
 
 # Add tissue metadata
-object.integrated$tissue <- stringr::str_split(object.integrated$orig.ident, 
-                                               "[.]", 
-                                               simplify = TRUE)[,2]
+SeuratObj$tissue <- stringr::str_split(SeuratObj$orig.ident, 
+                                       "[.]", 
+                                        simplify = TRUE)[,2]
 
 # Save the final, memory-efficient, and well-integrated object
-saveRDS(object.integrated, "./data/integratedSeuratObject_scVI.rds")
+saveRDS(SeuratObj, "./data/integratedSeuratObject.rds")
 
 # 8. Visualize the results
 # Visualize the UMAP, grouping by different metadata columns to assess integration
 DimPlot(
-  object.integrated,
-  reduction = "umap.scvi",
+  SeuratObj,
+  reduction = "umap.harmony",
   group.by = c("orig.ident", "tissue"),
   combine = FALSE, 
   label.size = 2
 )
 
 # Visualize expression of key marker genes on the new UMAP
-FeaturePlot(object.integrated, 
+FeaturePlot(SeuratObj, 
             features = c("CD4", "CD8A", "FOXP3"), 
-            reduction = "umap.scvi")
+            reduction = "umap.harmony")
 
 ```
 
@@ -197,66 +210,212 @@ This section performs cell clustering using the Leiden algorithm, which is a fas
 ```{r}
 # 1. Find Neighbors
 # This step builds a Shared Nearest Neighbor (SNN) graph, which is required for clustering.
-# We use the 'scvi' reduction which represents the integrated data space.
-object.integrated <- FindNeighbors(object.integrated, 
-                                   reduction = "scvi", 
-                                   dims = 1:30)
+# We use the 'harmony' reduction which represents the integrated data space.
+SeuratObj <- FindNeighbors(SeuratObj, 
+                           reduction = "harmony", 
+                           dims = 1:30)
 
-# 2. Evaluate Clustering Resolutions
-# We will test a range of resolutions for the Leiden algorithm to find the one
-# that gives the most coherent clusters. We'll use the average silhouette
-# width as our metric. A higher silhouette score indicates better-defined clusters.
+# ---- User parameters ----
+resolutions      <- seq(0.2, 2.0, by = 0.2)
+B_bootstrap      <- 50L          # number of bootstraps per resolution 
+n_sil_cells      <- 4000L        # max cells per bootstrap 
+random_seed      <- 42L
+reduction_for_dist <- "harmony"  
+reduction_for_plot <- "umap.harmony" 
+tiny_cluster_n   <- 50L          # report % clusters with < this size
+assay_for_clust  <- DefaultAssay(SeuratObj)
 
-# Define the range of resolutions to test
-resolutions <- seq(0.1, 1.2, by = 0.1)
-silhouette_scores <- c()
+# Parallel plan
+plan(multisession, workers = max(1, parallel::detectCores() - 1))
 
-for (res in resolutions) {
-    cat("Testing resolution:", res, "\n")
-    # Run Leiden clustering
-    object.integrated <- FindClusters(object.integrated, 
-                                      resolution = res, 
-                                      algorithm.name = "leiden", 
-                                      verbose = FALSE)
+# Reproducibility
+set.seed(random_seed)
 
-    # Calculate silhouette score
-    # Note: This can be computationally intensive on large datasets.
-    # We take a random sample of 5000 cells to make it feasible.
-    if (ncol(object.integrated) > 5000) {
-      cells_for_sil <- sample(colnames(object.integrated), 5000)
-    } else {
-      cells_for_sil <- colnames(object.integrated)
-    }
 
-    # The silhouette function requires numeric cluster labels and a distance matrix
-    sil <- silhouette(
-        x = as.numeric(as.character(object.integrated@meta.data[cells_for_sil, "seurat_clusters"])),
-        dist = dist(object.integrated@reductions$scvi@cell.embeddings[cells_for_sil, ])
-    )
+emb_all <- SeuratObj@reductions[[reduction_for_dist]]@cell.embeddings
+all_cells <- colnames(SeuratObj)
 
-    # We use the summary of the silhouette object to get the average width
-    avg_sil_width <- summary(sil)$avg.width
-    silhouette_scores <- c(silhouette_scores, avg_sil_width)
+# Helper: sample cells for silhouette bootstrap
+.sample_cells <- function(n_take, universe) {
+  if (length(universe) <= n_take) return(universe)
+  sample(universe, n_take)
 }
 
-# Plot the results to find the optimal resolution
-plot(resolutions, silhouette_scores, type = "b", pch = 19,
-     xlab = "Resolution", ylab = "Average Silhouette Width",
-     main = "Leiden Clustering Resolution Optimization")
+# Helper: compute silhouette mean for a given clustering on a subset of cells
+.silhouette_mean <- function(idents_vec, emb_mat, cells_subset) {
+  labs <- idents_vec[cells_subset]
+  if (length(unique(labs)) < 2L) return(NA_real_)
+  dmat <- dist(emb_mat[cells_subset, , drop = FALSE])
+  sil  <- silhouette(x = as.integer(as.factor(labs)), dist = dmat)
+  mean(sil[, "sil_width"], na.rm = TRUE)
+}
 
-# 3. Final Clustering
-# Choose the resolution that gives the highest silhouette score
-optimal_resolution <- resolutions[which.max(silhouette_scores)]
-cat("Optimal resolution found:", optimal_resolution, "\n")
+# ---- Main sweep with bootstrapping ----
+results_list <- list()
 
-# Re-run clustering with the optimal resolution
-object.integrated <- FindClusters(object.integrated, resolution = optimal_resolution, algorithm.name = "leiden", verbose = FALSE)
-# Rename the final clusters for clarity
-object.integrated$leiden_clusters <- object.integrated$seurat_clusters
+for (res in resolutions) {
+  message("Testing resolution: ", res)
 
-# 4. Visualize the Final Clustering
-DimPlot(object.integrated, reduction = "umap.scvi", group.by = "leiden_clusters", label = TRUE)
+  # Run Leiden clustering at this resolution
+  SeuratObj <- FindClusters(
+    SeuratObj,
+    resolution = res,
+    algorithm  = 4,          # Leiden
+    random.seed = random_seed,
+    verbose = FALSE
+  )
+  clust_ids <- Idents(SeuratObj) # factor, names = cells
+
+  # QC stats for this resolution
+  clust_tab <- table(clust_ids)
+  n_clust   <- length(clust_tab)
+  min_size  <- min(clust_tab)
+  pct_tiny  <- 100 * sum(clust_tab < tiny_cluster_n) / n_clust
+
+  # Bootstrapped silhouettes
+  boot_vals <- future_sapply(
+    X = seq_len(B_bootstrap),
+    FUN = function(bi) {
+      set.seed(random_seed + bi)
+      cells_for_sil <- .sample_cells(n_sil_cells, all_cells)
+      .silhouette_mean(clust_ids, emb_all, cells_for_sil)
+    },
+    future.seed = TRUE,
+    simplify = TRUE
+  )
+
+  # Summaries
+  mu  <- mean(boot_vals, na.rm = TRUE)
+  sdv <- stats::sd(boot_vals, na.rm = TRUE)
+  n_eff <- sum(is.finite(boot_vals))
+  se  <- sdv / sqrt(max(1L, n_eff))
+  ci95_low <- mu - 1.96 * se
+  ci95_hi  <- mu + 1.96 * se
+
+  results_list[[as.character(res)]] <- list(
+    resolution = res,
+    n_clusters = n_clust,
+    min_cluster_size = as.integer(min_size),
+    pct_tiny_clusters = pct_tiny,
+    sil_boot = boot_vals,
+    sil_mean = mu,
+    sil_sd   = sdv,
+    sil_se   = se,
+    sil_ci95_low = ci95_low,
+    sil_ci95_hi  = ci95_hi
+  )
+}
+
+# ---- Tidy results ----
+df_summary <- do.call(
+  rbind,
+  lapply(results_list, function(x) {
+    data.frame(
+      resolution = x$resolution,
+      n_clusters = x$n_clusters,
+      min_cluster_size = x$min_cluster_size,
+      pct_tiny_clusters = x$pct_tiny_clusters,
+      sil_mean = x$sil_mean,
+      sil_sd   = x$sil_sd,
+      sil_se   = x$sil_se,
+      sil_ci95_low = x$sil_ci95_low,
+      sil_ci95_hi  = x$sil_ci95_hi,
+      stringsAsFactors = FALSE
+    )
+  })
+)
+
+df_boot <- do.call(
+  rbind,
+  lapply(results_list, function(x) {
+    data.frame(
+      resolution = x$resolution,
+      sil_boot   = x$sil_boot,
+      stringsAsFactors = FALSE
+    )
+  })
+)
+df_boot$resolution <- as.numeric(df_boot$resolution)
+df_summary <- df_summary[order(df_summary$resolution), ]
+df_boot    <- df_boot[order(df_boot$resolution), ]
+
+# ---- Pick optimal resolution (best mean silhouette; ties -> fewer clusters) ----
+best_idx <- which(df_summary$sil_mean == max(df_summary$sil_mean, na.rm = TRUE))
+if (length(best_idx) > 1L) {
+  # break ties by minimizing number of clusters
+  best_idx <- best_idx[which.min(df_summary$n_clusters[best_idx])]
+}
+optimal_resolution <- df_summary$resolution[best_idx]
+
+# Re-run final clustering at optimal resolution and store
+SeuratObj <- FindClusters(
+  SeuratObj,
+  resolution = optimal_resolution,
+  algorithm  = 4,
+  random.seed = random_seed,
+  verbose = FALSE
+)
+SeuratObj$leiden_clusters <- Idents(SeuratObj)
+
+## ---- Visulizations
+
+# 1) Silhouette mean ± 95% CI vs resolution
+p1 <- ggplot(df_summary, aes(x = resolution, y = sil_mean)) +
+  geom_ribbon(aes(ymin = sil_ci95_low, ymax = sil_ci95_hi), alpha = 0.15) +
+  geom_line(size = 0.9) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = optimal_resolution, linetype = 2) +
+  labs(title = "Leiden resolution optimization (bootstrapped silhouette)",
+       x = "Resolution", y = "Mean silhouette (±95% CI)") +
+  theme_bw(base_size = 12) +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold"))
+
+# 2) Violin + jitter of bootstrap silhouettes per resolution
+p2 <- ggplot(df_boot, aes(x = factor(resolution), y = sil_boot, group = factor(resolution))) +
+  geom_violin(trim = TRUE, width = 0.9) +
+  geom_jitter(width = 0.08, alpha = 0.3, size = 0.6) +
+  geom_hline(yintercept = 0, linetype = 3) +
+  labs(title = paste0("Bootstrap silhouettes (B = ", B_bootstrap, ")"),
+       x = "Resolution", y = "Silhouette width") +
+  theme_bw(base_size = 12) +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold"))
+
+# 3) Number of clusters vs resolution + tiny cluster %
+p3 <- ggplot(df_summary, aes(x = resolution, y = n_clusters)) +
+  geom_line(size = 0.9) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = optimal_resolution, linetype = 2) +
+  labs(title = "Model complexity",
+       x = "Resolution", y = "# clusters") +
+  theme_bw(base_size = 12) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold"))
+
+p3b <- ggplot(df_summary, aes(x = resolution, y = pct_tiny_clusters)) +
+  geom_line(size = 0.9) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = optimal_resolution, linetype = 2) +
+  labs(title = paste0("Tiny clusters (<", tiny_cluster_n, " cells)"),
+       x = "Resolution", y = "% tiny clusters") +
+  theme_bw(base_size = 12) +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold"))
+
+# 4) Final clustering UMAP
+p4 <- DimPlot(SeuratObj,
+              reduction = reduction_for_plot,
+              group.by = "leiden_clusters",
+              label = TRUE, repel = TRUE) + 
+          theme (plot.title = element_blank())
+
+# Combine overview figure
+overview <- (p1 / p2) | (p3 / p3b)
+overview
+p4
 
 # Save the final object with clustering information
-saveRDS(object.integrated, "./data/integratedSeuratObject_scVI_clustered.rds")
+saveRDS(SeuratObj, "./data/integratedSeuratObject.rds")
 ```
