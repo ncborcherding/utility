@@ -6,7 +6,7 @@ library(Seurat)
 
 # 1. Load the final integrated Seurat object
 # This assumes the script is run from the root of the project directory
-seurat_object_path <- "./data/integratedSeuratObject_scVI_clustered.rds"
+seurat_object_path <- "./data/integratedSeuratObject.rds"
 if (!file.exists(seurat_object_path)) {
   stop("Final Seurat object not found. Please run the integration pipeline first.")
 }
