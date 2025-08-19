@@ -6,9 +6,6 @@ date: "2024-03-20"
 
 # Set Up
 
-## Installing Harmony-tools
-
-
 ## Loading Libraries and Functions
 
 ```{r}
@@ -16,11 +13,16 @@ library(BPCells)
 library(cluster)
 library(future)
 library(future.apply)
+library(ggplot2)
+library(harmony)
 library(patchwork)
 library(reticulate)
 library(Seurat)
 library(SeuratWrappers)
 library(SingleCellExperiment)
+library(viridis)
+
+source("./R/utils.R")
 ```
 
 # Integrating All Cells with BPCells and Harmony
@@ -164,12 +166,13 @@ SeuratObj <- SeuratObj %>%
               RunPCA(verbose = FALSE, 
                      features = variable.features)
 
-SeuratObj <- IntegrateLayers(
-  object = SeuratObj, 
-  method = HarmonyIntegration,
-  new.reduction = "harmony",
-  verbose = FALSE
-)
+# Add tissue metadata
+SeuratObj$tissue <- stringr::str_split(SeuratObj$orig.ident, 
+                                       "[.]", 
+                                        simplify = TRUE)[,2]
+
+SeuratObj <- RunHarmony(SeuratObj, 
+                        group.by.vars = c("tissue", "orig.ident"))
 
 # 7. Dimensional Reduction
 # We can proceed with downstream analysis like PCA and UMAP on the integrated data.
@@ -178,29 +181,53 @@ SeuratObj <- RunUMAP(SeuratObj,
                      dims = 1:30,
                      reduction.name = "umap.harmony")
 
-# Add tissue metadata
-SeuratObj$tissue <- stringr::str_split(SeuratObj$orig.ident, 
-                                       "[.]", 
-                                        simplify = TRUE)[,2]
+
 
 # Save the final, memory-efficient, and well-integrated object
 saveRDS(SeuratObj, "./data/integratedSeuratObject.rds")
 
 # 8. Visualize the results
 # Visualize the UMAP, grouping by different metadata columns to assess integration
-DimPlot(
-  SeuratObj,
-  reduction = "umap.harmony",
-  group.by = c("orig.ident", "tissue"),
-  combine = FALSE, 
-  label.size = 2
-)
+p1 <- DimPlot(SeuratObj,
+              reduction = "umap.harmony",
+              group.by = "orig.ident") + 
+  UtilityTheme(grid_lines = "No") + 
+  guides(color = "none") + 
+  xlab("UMAP1") + 
+  ylab("UMAP2") + 
+  scale_color_viridis(option = "H", discrete = TRUE) + 
+  theme(plot.title = element_blank())
 
-# Visualize expression of key marker genes on the new UMAP
-FeaturePlot(SeuratObj, 
-            features = c("CD4", "CD8A", "FOXP3"), 
-            reduction = "umap.harmony")
+# Second DimPlot
+p2 <- DimPlot(SeuratObj,
+              reduction = "umap.harmony",
+              group.by = "tissue") +
+  UtilityTheme(grid_lines = "No") + 
+  xlab("UMAP1") + 
+  ylab("UMAP2") + 
+  scale_color_viridis(option = "H", discrete = TRUE) + 
+  theme(plot.title = element_blank())
 
+p1 + p2 
+
+fp <- FeaturePlot(SeuratObj, 
+                  features = c("CD4", "CD8A", "FOXP3", 
+                               "CCR7", "SELL", "IL7R", 
+                               "IFNG","PDCD1", "CTLA4"), 
+                  reduction = "umap.harmony", 
+                  combine = FALSE)
+
+fp <- lapply(fp, function(x) {
+          x <- x + 
+              UtilityTheme(grid_lines = "No") + 
+              guides(color = "none") + 
+              scale_color_viridis() + 
+              theme(axis.title = element_blank(), 
+                    axis.text = element_blank(), 
+                    axis.ticks = element_blank())
+})
+
+wrap_plots(fp)
 ```
 
 # Leiden Clustering and Evaluation
@@ -234,21 +261,6 @@ set.seed(random_seed)
 
 emb_all <- SeuratObj@reductions[[reduction_for_dist]]@cell.embeddings
 all_cells <- colnames(SeuratObj)
-
-# Helper: sample cells for silhouette bootstrap
-.sample_cells <- function(n_take, universe) {
-  if (length(universe) <= n_take) return(universe)
-  sample(universe, n_take)
-}
-
-# Helper: compute silhouette mean for a given clustering on a subset of cells
-.silhouette_mean <- function(idents_vec, emb_mat, cells_subset) {
-  labs <- idents_vec[cells_subset]
-  if (length(unique(labs)) < 2L) return(NA_real_)
-  dmat <- dist(emb_mat[cells_subset, , drop = FALSE])
-  sil  <- silhouette(x = as.integer(as.factor(labs)), dist = dmat)
-  mean(sil[, "sil_width"], na.rm = TRUE)
-}
 
 # ---- Main sweep with bootstrapping ----
 results_list <- list()
