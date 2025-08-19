@@ -6,135 +6,428 @@ date: "2024-03-20"
 
 # Set Up
 
-## Installing scvi-tools
-
-```{r eval = FALSE}
-library(reticulate)
-conda_create("scvi-env")
-conda_install("sci-env", "scvi-tools", pip = TRUE)
-conda_install("sci-env", "scanpy", pip = TRUE)
-```
-
 ## Loading Libraries and Functions
 
 ```{r}
+library(BPCells)
+library(cluster)
+library(future)
+library(future.apply)
+library(ggplot2)
+library(harmony)
+library(patchwork)
+library(reticulate)
 library(Seurat)
 library(SeuratWrappers)
+library(SingleCellExperiment)
+library(viridis)
 
-source("./R/checkAndUpdateGenes.R")
+source("./R/utils.R")
 ```
 
-## Finding Initial Features Space for Full Integration
+# Integrating All Cells with BPCells and Harmony
 
-Here I am randomly sampling 20% of the Seurat Objects in order to get the 4000 most variable features. This sampling is across tissues and tumors to make it robust. We will use the features to subset the Seurat Objects towards a full integration.
+Now we can take all the Seurat Objects and integrate them. The following code has been optimized for memory efficiency and scalability. It uses `BPCells` to store the count matrices on disk, avoiding the need to load the entire dataset into RAM. It then uses `harmony` for integration. The raw count matrices are first filtered and subset to a common feature space before being converted to the `BPCells` format.
 
 ```{r}
+# This chunk uses BPCells to store data on-disk and Harmony for integration.
+
+# 1. Setup BPCells directory
+# Create a directory to store the on-disk BPCells matrices
+bp_dir <- "./data/processedData/bpcells_matrices/"
+if (!dir.exists(bp_dir)) {
+  dir.create(bp_dir, recursive = TRUE)
+}
+
+# 2. Load feature space and file list
 files <- list.files("./data/processedData/seuratObjects/")
 names <- stringr::str_remove_all(files, ".rds")
 
-set.seed(42)
-sampled <- sample(727, 146)
-files <- files[sampled]
-names <- names[sampled]
-object.list <- lapply(seq_len(length(files)), function(x) {
-                      obj <- readRDS(paste0("./data/processedData/seuratObjects/", files[x]))
-                      
-                      LayerData(obj, layer = "data") <- NULL
-                      obj@meta.data <- obj[[]][,1:6]
-                      obj$orig.ident <- names[x]
-                      obj
-})
-gc()
+# 3. Process objects one-by-one and convert to BPCells format
+# This loop reads each Seurat object, applies initial filtering,
+# and then writes the count matrix to an on-disk BPCells matrix. 
+# This avoids loading all data into RAM at once.
+for (x in seq_along(names)) {
+  sample_name <- names[x]
+  bp_path <- file.path(bp_dir, sample_name)
+  meta_path <- file.path(bp_dir, paste0(sample_name, "_meta.rds"))
+  features_path <- file.path(bp_path, "features.rds")
+  barcodes_path <- file.path(bp_path, "barcodes.rds")
 
-object.merge <- merge(object.list[[1]], object.list[-1])
+  if (dir.exists(bp_path) && file.exists(meta_path) && file.exists(features_path)) {
+    message("Skipping already processed sample: ", sample_name)
+    next()
+  }
+
+  obj <- readRDS(paste0("./data/processedData/seuratObjects/", files[x]))
+
+  # Filtering
+  if ("predicted.celltype.l1" %in% colnames(obj[[]])) {
+    if (any(grepl("CD4 T|CD8 T|other T|NK", obj$predicted.celltype.l1))) {
+      obj <- subset(obj, predicted.celltype.l1 %in% c("CD4 T", "CD8 T", "other T", "NK"))
+    } else next()
+  }
+  if ("CTaa" %in% colnames(obj[[]])) {
+    cells <- which(!is.na(obj[[]][, "CTaa"]))
+    if (length(cells) == 0) next()
+    obj <- subset(obj, cells = colnames(obj)[cells])
+  }
+  if ("db.class" %in% colnames(obj[[]])) {
+    if (ncol(obj) == 0) next()
+    obj <- subset(obj, db.class == "singlet")
+  }
+  if (ncol(obj) <= 1) next()
+
+  obj$orig.ident <- sample_name
+
+  # Write BPCells counts
+  BPCells::write_matrix_dir(mat = obj@assays$RNA@layers$counts, dir = bp_path)
+
+  # Save feature names
+  saveRDS(rownames(obj), file = features_path)
+  
+  # Save feature names
+  saveRDS(colnames(obj), file = barcodes_path)
+
+  # Save metadata
+  saveRDS(obj[[]], file = meta_path)
+
+  rm(obj)
+  gc()
+}
+
+# 4. Build the list of Seurat objects from disk
+processed_names <- list.dirs(bp_dir, full.names = FALSE, recursive = FALSE)
+
+object.list <- lapply(processed_names, function(p_name) {
+  bp_path <- file.path(bp_dir, p_name)
+  meta_path <- file.path(bp_dir, paste0(p_name, "_meta.rds"))
+  features_path <- file.path(bp_path, "features.rds")
+  barcodes_path <- file.path(bp_path, "barcodes.rds")
+
+  counts_bp <- BPCells::open_matrix_dir(bp_path)
+  rownames(counts_bp) <- readRDS(features_path)
+  colnames(counts_bp) <- readRDS(barcodes_path)
+
+  Seurat::CreateSeuratObject(
+    counts = counts_bp,
+    meta.data = readRDS(meta_path)
+  )
+})
+names(object.list) <- processed_names
+
+
+# 5. Identify features to integrate
+per_sample_stats <- lapply(object.list, function(obj) {
+  counts_bp <- obj@assays$RNA@layers$counts
+  if (is.null(counts_bp)) counts_bp <- obj@assays$RNA@counts
+
+  lib_sizes <- as.numeric(BPCells::colSums(counts_bp))
+  lib_sizes[lib_sizes == 0] <- 1
+  scale_factor <- median(lib_sizes)
+
+  # Normalize (still on disk)
+  norm_bp <- t(t(counts_bp) / lib_sizes) * scale_factor
+
+  # Materialize to sparse matrix before log1p
+  norm_mat <- as(norm_bp, "dgCMatrix")
+  logcounts <- log1p(norm_mat)
+
+  sce <- SingleCellExperiment(assays = list(logcounts = logcounts))
+  diff <- scran::modelGeneVar(sce, assay.type = "logcounts")
+  diff@rownames <- rownames(obj)
+  return(diff)
+})
+
+# Harmonize features across samples
+common_genes <- Reduce(intersect, lapply(per_sample_stats, rownames))
+per_sample_stats <- lapply(per_sample_stats, function(stat) {
+  stat[common_genes, , drop = FALSE]
+})
+
+# Combine variance stats and pick HVGs
+combined_stats <- scran::combineVar(per_sample_stats)
+top_hvg <- scran::getTopHVGs(combined_stats, n = 2035)
+
+#Removing VDJ/Ribosomal/Mitochondrial Genes
+variable.features <- scRepertoire::quietVDJgenes(top_hvg)
+variable.features <- variable.features[!grepl('^RP[SL][[:digit:]]|^RPLP[[:digit:]]|^RPSA|^MT-', 
+                                              variable.features)]
+
+# Forming a Single Seurat Object
+SeuratObj <- merge(object.list[[1]], object.list[-1])
 rm(object.list)
 gc()
 
-object.merge  <- NormalizeData(object.merge )
-object.merge <- JoinLayers(object.merge)
-object.merge  <- FindVariableFeatures(object.merge, nfeatures = 6000)
+SeuratObj <- SeuratObj %>%
+              NormalizeData(verbose = FALSE) %>%
+              ScaleData(features = variable.features,
+                        verbose = FALSE) %>%
+              RunPCA(verbose = FALSE, 
+                     features = variable.features)
 
-# Removing specific feature sets
-features.to.use <- VariableFeatures(object.merge)
-features.to.use <- Ibex::quietBCRgenes(features.to.use)
-features.to.use <- Trex::quietTCRgenes(features.to.use)
-features.to.use <- features.to.use[!grepl("RPS|RPL|LINC|MT-|AC0|AC1|AC2|RP11-|MIR|HB|IGHV", features.to.use)]
+# Add tissue metadata
+SeuratObj$tissue <- stringr::str_split(SeuratObj$orig.ident, 
+                                       "[.]", 
+                                        simplify = TRUE)[,2]
 
-#Taking the top 4000 features for integration
-new.features <- features.to.use[1:4000]
+SeuratObj <- RunHarmony(SeuratObj, 
+                        group.by.vars = c("tissue", "orig.ident"))
 
-saveRDS(features.to.use, "./outputs/reference/Overall_featureSpace.rds")
-rm(object.merge)
-gc()
+# 7. Dimensional Reduction
+# We can proceed with downstream analysis like PCA and UMAP on the integrated data.
+SeuratObj <- RunUMAP(SeuratObj,
+                     reduction = "harmony",
+                     dims = 1:30,
+                     reduction.name = "umap.harmony")
+
+
+
+# Save the final, memory-efficient, and well-integrated object
+saveRDS(SeuratObj, "./data/integratedSeuratObject.rds")
+
+# 8. Visualize the results
+# Visualize the UMAP, grouping by different metadata columns to assess integration
+p1 <- DimPlot(SeuratObj,
+              reduction = "umap.harmony",
+              group.by = "orig.ident") + 
+  UtilityTheme(grid_lines = "No") + 
+  guides(color = "none") + 
+  xlab("UMAP1") + 
+  ylab("UMAP2") + 
+  scale_color_viridis(option = "H", discrete = TRUE) + 
+  theme(plot.title = element_blank())
+
+# Second DimPlot
+p2 <- DimPlot(SeuratObj,
+              reduction = "umap.harmony",
+              group.by = "tissue") +
+  UtilityTheme(grid_lines = "No") + 
+  xlab("UMAP1") + 
+  ylab("UMAP2") + 
+  scale_color_viridis(option = "H", discrete = TRUE) + 
+  theme(plot.title = element_blank())
+
+p1 + p2 
+
+fp <- FeaturePlot(SeuratObj, 
+                  features = c("CD4", "CD8A", "FOXP3", 
+                               "CCR7", "SELL", "IL7R", 
+                               "IFNG","PDCD1", "CTLA4"), 
+                  reduction = "umap.harmony", 
+                  combine = FALSE)
+
+fp <- lapply(fp, function(x) {
+          x <- x + 
+              UtilityTheme(grid_lines = "No") + 
+              guides(color = "none") + 
+              scale_color_viridis() + 
+              theme(axis.title = element_blank(), 
+                    axis.text = element_blank(), 
+                    axis.ticks = element_blank())
+})
+
+wrap_plots(fp)
 ```
 
-# Integrating All Cells
+# Leiden Clustering and Evaluation
 
-Now we can take all the Seurat Objects and subset them by the most variable features across presumably the cohort (sampled cohort above).
+This section performs cell clustering using the Leiden algorithm, which is a fast and high-quality community detection algorithm. To determine the optimal clustering granularity, we systematically test a range of resolution parameters. The best resolution is selected by finding the one that maximizes the average silhouette width, a measure of cluster cohesion and separation.
 
 ```{r}
-files <- list.files("./data/processedData/seuratObjects/")
-names <- stringr::str_remove_all(files, ".rds")
-features.to.use <- readRDS("./outputs/reference/Overall_featureSpace.rds")
+# 1. Find Neighbors
+# This step builds a Shared Nearest Neighbor (SNN) graph, which is required for clustering.
+# We use the 'harmony' reduction which represents the integrated data space.
+SeuratObj <- FindNeighbors(SeuratObj, 
+                           reduction = "harmony", 
+                           dims = 1:30)
 
-object.list <- lapply(seq_len(length(files)), function(x) {
-                      obj <- readRDS(paste0("./data/processedData/seuratObjects/", files[x]))
-                      obj <- subset(obj, features = features.to.use)
-                      obj$orig.ident <- names[x]
-                      obj
-})
-gc()
+# ---- User parameters ----
+resolutions      <- seq(0.2, 2.0, by = 0.2)
+B_bootstrap      <- 50L          # number of bootstraps per resolution 
+n_sil_cells      <- 4000L        # max cells per bootstrap 
+random_seed      <- 42L
+reduction_for_dist <- "harmony"  
+reduction_for_plot <- "umap.harmony" 
+tiny_cluster_n   <- 50L          # report % clusters with < this size
+assay_for_clust  <- DefaultAssay(SeuratObj)
 
-object.merge <- merge(object.list[[1]], object.list[-1])
-rm(object.list)
-gc()
-object.merge <- JoinLayers(object.merge)
-object.merge  <- NormalizeData(object.merge )
-object.merge <- FindVariableFeatures(object.merge, nfeatures = 2000)
-object.merge  <- ScaleData(object.merge)
-object.merge  <- RunPCA(object.merge, 
-                        verbose = FALSE)
-saveRDS(object.merge, "./data/integratedSeuratObject.rds")
+# Parallel plan
+plan(multisession, workers = max(1, parallel::detectCores() - 1))
 
-object.merge <- RunHarmony(object.merge, "orig.ident")
+# Reproducibility
+set.seed(random_seed)
 
-saveRDS(object.merge, "./data/integratedSeuratObject.rds")
 
-object.merge <- RunUMAP(object.merge, 
-                        reduction = "harmony", 
-                        dims = 1:30, 
-                        reduction.name = "umap.harmony") 
+emb_all <- SeuratObj@reductions[[reduction_for_dist]]@cell.embeddings
+all_cells <- colnames(SeuratObj)
 
-object.merge$tissue <- stringr::str_split(object.merge$orig.ident, "[.]", simplify = TRUE)[,2]
+# ---- Main sweep with bootstrapping ----
+results_list <- list()
 
-DimPlot(
-  object.merge,
-  reduction = "umap.mnn",
-  group.by = c("orig.ident", "predicted.celltype.l2", "tissue", "cloneSize"),
-  combine = FALSE, 
-  label.size = 2
+for (res in resolutions) {
+  message("Testing resolution: ", res)
+
+  # Run Leiden clustering at this resolution
+  SeuratObj <- FindClusters(
+    SeuratObj,
+    resolution = res,
+    algorithm  = 4,          # Leiden
+    random.seed = random_seed,
+    verbose = FALSE
+  )
+  clust_ids <- Idents(SeuratObj) # factor, names = cells
+
+  # QC stats for this resolution
+  clust_tab <- table(clust_ids)
+  n_clust   <- length(clust_tab)
+  min_size  <- min(clust_tab)
+  pct_tiny  <- 100 * sum(clust_tab < tiny_cluster_n) / n_clust
+
+  # Bootstrapped silhouettes
+  boot_vals <- future_sapply(
+    X = seq_len(B_bootstrap),
+    FUN = function(bi) {
+      set.seed(random_seed + bi)
+      cells_for_sil <- .sample_cells(n_sil_cells, all_cells)
+      .silhouette_mean(clust_ids, emb_all, cells_for_sil)
+    },
+    future.seed = TRUE,
+    simplify = TRUE
+  )
+
+  # Summaries
+  mu  <- mean(boot_vals, na.rm = TRUE)
+  sdv <- stats::sd(boot_vals, na.rm = TRUE)
+  n_eff <- sum(is.finite(boot_vals))
+  se  <- sdv / sqrt(max(1L, n_eff))
+  ci95_low <- mu - 1.96 * se
+  ci95_hi  <- mu + 1.96 * se
+
+  results_list[[as.character(res)]] <- list(
+    resolution = res,
+    n_clusters = n_clust,
+    min_cluster_size = as.integer(min_size),
+    pct_tiny_clusters = pct_tiny,
+    sil_boot = boot_vals,
+    sil_mean = mu,
+    sil_sd   = sdv,
+    sil_se   = se,
+    sil_ci95_low = ci95_low,
+    sil_ci95_hi  = ci95_hi
+  )
+}
+
+# ---- Tidy results ----
+df_summary <- do.call(
+  rbind,
+  lapply(results_list, function(x) {
+    data.frame(
+      resolution = x$resolution,
+      n_clusters = x$n_clusters,
+      min_cluster_size = x$min_cluster_size,
+      pct_tiny_clusters = x$pct_tiny_clusters,
+      sil_mean = x$sil_mean,
+      sil_sd   = x$sil_sd,
+      sil_se   = x$sil_se,
+      sil_ci95_low = x$sil_ci95_low,
+      sil_ci95_hi  = x$sil_ci95_hi,
+      stringsAsFactors = FALSE
+    )
+  })
 )
 
-FeaturePlot(object.merge, c("CD4", "CD8A", "FOXP3"))
+df_boot <- do.call(
+  rbind,
+  lapply(results_list, function(x) {
+    data.frame(
+      resolution = x$resolution,
+      sil_boot   = x$sil_boot,
+      stringsAsFactors = FALSE
+    )
+  })
+)
+df_boot$resolution <- as.numeric(df_boot$resolution)
+df_summary <- df_summary[order(df_summary$resolution), ]
+df_boot    <- df_boot[order(df_boot$resolution), ]
 
+# ---- Pick optimal resolution (best mean silhouette; ties -> fewer clusters) ----
+best_idx <- which(df_summary$sil_mean == max(df_summary$sil_mean, na.rm = TRUE))
+if (length(best_idx) > 1L) {
+  # break ties by minimizing number of clusters
+  best_idx <- best_idx[which.min(df_summary$n_clusters[best_idx])]
+}
+optimal_resolution <- df_summary$resolution[best_idx]
 
+# Re-run final clustering at optimal resolution and store
+SeuratObj <- FindClusters(
+  SeuratObj,
+  resolution = optimal_resolution,
+  algorithm  = 4,
+  random.seed = random_seed,
+  verbose = FALSE
+)
+SeuratObj$leiden_clusters <- Idents(SeuratObj)
+
+## ---- Visulizations
+
+# 1) Silhouette mean ± 95% CI vs resolution
+p1 <- ggplot(df_summary, aes(x = resolution, y = sil_mean)) +
+  geom_ribbon(aes(ymin = sil_ci95_low, ymax = sil_ci95_hi), alpha = 0.15) +
+  geom_line(size = 0.9) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = optimal_resolution, linetype = 2) +
+  labs(title = "Leiden resolution optimization (bootstrapped silhouette)",
+       x = "Resolution", y = "Mean silhouette (±95% CI)") +
+  theme_bw(base_size = 12) +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold"))
+
+# 2) Violin + jitter of bootstrap silhouettes per resolution
+p2 <- ggplot(df_boot, aes(x = factor(resolution), y = sil_boot, group = factor(resolution))) +
+  geom_violin(trim = TRUE, width = 0.9) +
+  geom_jitter(width = 0.08, alpha = 0.3, size = 0.6) +
+  geom_hline(yintercept = 0, linetype = 3) +
+  labs(title = paste0("Bootstrap silhouettes (B = ", B_bootstrap, ")"),
+       x = "Resolution", y = "Silhouette width") +
+  theme_bw(base_size = 12) +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold"))
+
+# 3) Number of clusters vs resolution + tiny cluster %
+p3 <- ggplot(df_summary, aes(x = resolution, y = n_clusters)) +
+  geom_line(size = 0.9) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = optimal_resolution, linetype = 2) +
+  labs(title = "Model complexity",
+       x = "Resolution", y = "# clusters") +
+  theme_bw(base_size = 12) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold"))
+
+p3b <- ggplot(df_summary, aes(x = resolution, y = pct_tiny_clusters)) +
+  geom_line(size = 0.9) +
+  geom_point(size = 2) +
+  geom_vline(xintercept = optimal_resolution, linetype = 2) +
+  labs(title = paste0("Tiny clusters (<", tiny_cluster_n, " cells)"),
+       x = "Resolution", y = "% tiny clusters") +
+  theme_bw(base_size = 12) +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold"))
+
+# 4) Final clustering UMAP
+p4 <- DimPlot(SeuratObj,
+              reduction = reduction_for_plot,
+              group.by = "leiden_clusters",
+              label = TRUE, repel = TRUE) + 
+          theme (plot.title = element_blank())
+
+# Combine overview figure
+overview <- (p1 / p2) | (p3 / p3b)
+overview
+p4
+
+# Save the final object with clustering information
+saveRDS(SeuratObj, "./data/integratedSeuratObject.rds")
 ```
-
- ####################
-                      #Filtering Strategy
-                      ###################
-                      #Step 1: Only taking T/NK cells from Automated Annotation
-                      if("predicted.celltype.l1" %in% colnames(obj[[]])) {
-                        obj <- subset(obj, predicted.celltype.l1 %in% c("CD4 T", "CD8 T", "other T", "NK"))
-                      } 
-                      
-                      #Step 2: Only cells with contig data
-                      if("CTaa" %in% colnames(obj[[]])) {
-                        cells <- which(!is.na(obj[[]][,"CTaa"]))
-                        obj <- subset(obj, cells = colnames(obj)[cells])
-                      }
-                      
-                      #Step 3: Only cells estimated to be singlets
-                      if("db.class" %in% colnames(obj[[]])) {
-                        obj <- subset(obj, db.class == "singlet")
-                      }
