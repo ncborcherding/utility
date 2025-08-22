@@ -1,16 +1,41 @@
-# Helper: sample cells for silhouette bootstrap
-.sample_cells <- function(n_take, universe) {
-  if (length(universe) <= n_take) return(universe)
-  sample(universe, n_take)
+.sample_cells <- function(n, pool) {
+  if (n >= length(pool)) return(pool)
+  sample(pool, n, replace = FALSE)
 }
 
-# Helper: compute silhouette mean for a given clustering on a subset of cells
-.silhouette_mean <- function(idents_vec, emb_mat, cells_subset) {
-  labs <- idents_vec[cells_subset]
-  if (length(unique(labs)) < 2L) return(NA_real_)
-  dmat <- dist(emb_mat[cells_subset, , drop = FALSE])
-  sil  <- silhouette(x = as.integer(as.factor(labs)), dist = dmat)
-  mean(sil[, "sil_width"], na.rm = TRUE)
+.silhouette_mean <- function(labels, emb, max_n = 4000L) {
+  # labels: named factor/character, names = cells present in emb
+  cells <- intersect(names(labels), rownames(emb))
+  if (length(cells) < 20L || length(unique(labels[cells])) < 2L) return(NA_real_)
+  if (length(cells) > max_n) cells <- sample(cells, max_n)
+  d <- stats::dist(emb[cells, , drop = FALSE])  # Euclidean on embedding
+  lab_int <- as.integer(factor(labels[cells]))
+  sil <- cluster::silhouette(lab_int, d)
+  mean(sil[, "sil_width"])
+}
+
+run_leiden_on_subset <- function(obj, cells, resolution) {
+  sobj <- subset(obj, cells = cells)
+  # Build neighbors in subset only
+  sobj <- FindNeighbors(
+    sobj,
+    reduction  = reduction_for_dist,
+    dims       = dims_use,
+    k.param    = k_param,
+    nn.method  = nn_method,
+    verbose    = FALSE
+  )
+  sobj <- FindClusters(
+    sobj,
+    resolution = resolution,
+    algorithm  = 4,          # Leiden
+    random.seed = random_seed,
+    verbose    = FALSE
+  )
+  list(
+    ids    = Idents(sobj),   # factor, names = subset cells
+    object = sobj
+  )
 }
 
 UtilityTheme <- function(base_size = 12,

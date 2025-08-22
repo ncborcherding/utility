@@ -11,11 +11,14 @@ date: "2024-03-20"
 ```{r}
 library(BPCells)
 library(cluster)
+library(FNN) 
 library(future)
 library(future.apply)
 library(ggplot2)
 library(harmony)
+library(mclust)
 library(patchwork)
+library(purrr)
 library(reticulate)
 library(Seurat)
 library(SeuratWrappers)
@@ -235,86 +238,122 @@ wrap_plots(fp)
 This section performs cell clustering using the Leiden algorithm, which is a fast and high-quality community detection algorithm. To determine the optimal clustering granularity, we systematically test a range of resolution parameters. The best resolution is selected by finding the one that maximizes the average silhouette width, a measure of cluster cohesion and separation.
 
 ```{r}
-# 1. Find Neighbors
-# This step builds a Shared Nearest Neighbor (SNN) graph, which is required for clustering.
-# We use the 'harmony' reduction which represents the integrated data space.
-SeuratObj <- FindNeighbors(SeuratObj, 
-                           reduction = "harmony", 
-                           dims = 1:30)
+# ---- Parameters ----
+#resolutions          <- seq(0.2, 2.0, by = 0.2)
+resolution           <- seq(0.2, 0.6, by = 0.2)
+B_bootstrap          <- 30L           # number of bootstraps 
+n_graph_cells        <- 30000L        # cells per bootstrap for building 
+n_sil_cells          <- 4000L         # cells per bootstrap for silhouette
+random_seed          <- 42L
+reduction_for_dist   <- "harmony"     # used for kNN + silhouette
+reduction_for_plot   <- "umap.harmony"
+dims_use             <- 1:30
+k_param              <- 20            
+tiny_cluster_n       <- 50L
+min_overlap_for_ari  <- 800L          # only compute ARI for bootstrap 
+nn_method            <- "annoy"       # memory-friendly approx kNN 
+assay_for_clust      <- DefaultAssay(SeuratObj)
 
-# ---- User parameters ----
-resolutions      <- seq(0.2, 2.0, by = 0.2)
-B_bootstrap      <- 50L          # number of bootstraps per resolution 
-n_sil_cells      <- 4000L        # max cells per bootstrap 
-random_seed      <- 42L
-reduction_for_dist <- "harmony"  
-reduction_for_plot <- "umap.harmony" 
-tiny_cluster_n   <- 50L          # report % clusters with < this size
-assay_for_clust  <- DefaultAssay(SeuratObj)
-
-# Parallel plan
-plan(multisession, workers = max(1, parallel::detectCores() - 1))
-
-# Reproducibility
+plan(sequential)
 set.seed(random_seed)
 
-
-emb_all <- SeuratObj@reductions[[reduction_for_dist]]@cell.embeddings
 all_cells <- colnames(SeuratObj)
+emb_all   <- SeuratObj@reductions[[reduction_for_dist]]@cell.embeddings[, dims_use, drop = FALSE]
 
-# ---- Main sweep with bootstrapping ----
+# ---- Main sweep with bootstrapping on subsets ----
 results_list <- list()
 
 for (res in resolutions) {
   message("Testing resolution: ", res)
 
-  # Run Leiden clustering at this resolution
-  SeuratObj <- FindClusters(
-    SeuratObj,
-    resolution = res,
-    algorithm  = 4,          # Leiden
-    random.seed = random_seed,
-    verbose = FALSE
-  )
-  clust_ids <- Idents(SeuratObj) # factor, names = cells
+  # Store per-bootstrap outputs
+  boot_sil   <- numeric(B_bootstrap)
+  boot_sizes <- vector("list", B_bootstrap)
+  boot_ids   <- vector("list", B_bootstrap)   # named vectors of clusters for ARI
 
-  # QC stats for this resolution
-  clust_tab <- table(clust_ids)
-  n_clust   <- length(clust_tab)
-  min_size  <- min(clust_tab)
-  pct_tiny  <- 100 * sum(clust_tab < tiny_cluster_n) / n_clust
+  for (bi in seq_len(B_bootstrap)) {
+    set.seed(random_seed + bi)
 
-  # Bootstrapped silhouettes
-  boot_vals <- future_sapply(
-    X = seq_len(B_bootstrap),
-    FUN = function(bi) {
-      set.seed(random_seed + bi)
-      cells_for_sil <- .sample_cells(n_sil_cells, all_cells)
-      .silhouette_mean(clust_ids, emb_all, cells_for_sil)
-    },
-    future.seed = TRUE,
-    simplify = TRUE
-  )
+    # 1) sample cells for this bootstrap (graph + clustering)
+    cells_graph <- .sample_cells(n_graph_cells, all_cells)
 
-  # Summaries
-  mu  <- mean(boot_vals, na.rm = TRUE)
-  sdv <- stats::sd(boot_vals, na.rm = TRUE)
-  n_eff <- sum(is.finite(boot_vals))
-  se  <- sdv / sqrt(max(1L, n_eff))
-  ci95_low <- mu - 1.96 * se
-  ci95_hi  <- mu + 1.96 * se
+    # 2) run neighbor graph & Leiden on the subset
+    res_subset <- run_leiden_on_subset(SeuratObj, cells_graph, res)
+    ids_sub    <- res_subset$ids
+    boot_ids[[bi]] <- ids_sub
 
+    # 3) QC on this bootstrap
+    tab_b <- table(ids_sub)
+    boot_sizes[[bi]] <- tab_b
+
+    # 4) silhouette on a sub-subset (<= n_sil_cells) from this subset
+    emb_sub <- Embeddings(res_subset$object, reduction = reduction_for_dist)[, dims_use, drop = FALSE]
+    cells_sil <- .sample_cells(min(n_sil_cells, length(ids_sub)), names(ids_sub))
+    sil_bi <- .silhouette_mean(labels = ids_sub, emb = emb_sub, max_n = n_sil_cells)
+    boot_sil[bi] <- sil_bi
+  }
+
+  # Summaries (silhouette)
+  sil_mu  <- mean(boot_sil, na.rm = TRUE)
+  sil_sd  <- stats::sd(boot_sil, na.rm = TRUE)
+  n_eff   <- sum(is.finite(boot_sil))
+  sil_se  <- sil_sd / sqrt(max(1L, n_eff))
+  ci95_lo <- sil_mu - 1.96 * sil_se
+  ci95_hi <- sil_mu + 1.96 * sil_se
+
+  # Summaries (cluster sizes averaged across bootstraps)
+  avg_n_clusters <- mean(vapply(boot_sizes, length, 1L))
+  avg_min_size   <- mean(vapply(boot_sizes, function(x) min(x), 1L))
+  avg_pct_tiny   <- mean(vapply(boot_sizes, function(x) 100 * sum(x < tiny_cluster_n) / length(x), 1.0))
+
+  # ---- Stability metric 2: ARI across bootstrap pairs on overlapping cells ----
+  # Compute ARI on pairs that share enough sampled cells
+  pair_ids <- combn(seq_len(B_bootstrap), 2, simplify = FALSE)
+  ari_vals <- numeric(length(pair_ids))
+  keep     <- logical(length(pair_ids))
+  for (pi in seq_along(pair_ids)) {
+    i <- pair_ids[[pi]][1]
+    j <- pair_ids[[pi]][2]
+    ids_i <- boot_ids[[i]]
+    ids_j <- boot_ids[[j]]
+    common <- intersect(names(ids_i), names(ids_j))
+    if (length(common) >= min_overlap_for_ari) {
+      ari_vals[pi] <- mclust::adjustedRandIndex(
+        as.integer(factor(ids_i[common])),
+        as.integer(factor(ids_j[common]))
+      )
+      keep[pi] <- TRUE
+    } else {
+      ari_vals[pi] <- NA_real_
+    }
+  }
+  ari_use <- ari_vals[keep]
+  ari_mu  <- if (length(ari_use)) mean(ari_use) else NA_real_
+  ari_sd  <- if (length(ari_use)) stats::sd(ari_use) else NA_real_
+  ari_se  <- if (length(ari_use)) ari_sd / sqrt(length(ari_use)) else NA_real_
+  ari_lo  <- if (length(ari_use)) ari_mu - 1.96 * ari_se else NA_real_
+  ari_hi  <- if (length(ari_use)) ari_mu + 1.96 * ari_se else NA_real_
+
+  # Save
   results_list[[as.character(res)]] <- list(
     resolution = res,
-    n_clusters = n_clust,
-    min_cluster_size = as.integer(min_size),
-    pct_tiny_clusters = pct_tiny,
-    sil_boot = boot_vals,
-    sil_mean = mu,
-    sil_sd   = sdv,
-    sil_se   = se,
-    sil_ci95_low = ci95_low,
-    sil_ci95_hi  = ci95_hi
+    sil_boot   = boot_sil,
+    sil_mean   = sil_mu,
+    sil_sd     = sil_sd,
+    sil_se     = sil_se,
+    sil_ci95_low = ci95_lo,
+    sil_ci95_hi  = ci95_hi,
+    # stability metric 2
+    ari_pairs  = ari_use,
+    ari_mean   = ari_mu,
+    ari_sd     = ari_sd,
+    ari_se     = ari_se,
+    ari_ci95_low = ari_lo,
+    ari_ci95_hi  = ari_hi,
+    # QC stats averaged across bootstraps
+    avg_n_clusters   = avg_n_clusters,
+    avg_min_size     = as.integer(avg_min_size),
+    avg_pct_tiny     = avg_pct_tiny
   )
 }
 
@@ -323,21 +362,27 @@ df_summary <- do.call(
   rbind,
   lapply(results_list, function(x) {
     data.frame(
-      resolution = x$resolution,
-      n_clusters = x$n_clusters,
-      min_cluster_size = x$min_cluster_size,
-      pct_tiny_clusters = x$pct_tiny_clusters,
-      sil_mean = x$sil_mean,
-      sil_sd   = x$sil_sd,
-      sil_se   = x$sil_se,
-      sil_ci95_low = x$sil_ci95_low,
-      sil_ci95_hi  = x$sil_ci95_hi,
+      resolution       = x$resolution,
+      avg_n_clusters   = x$avg_n_clusters,
+      avg_min_size     = x$avg_min_size,
+      avg_pct_tiny     = x$avg_pct_tiny,
+      sil_mean         = x$sil_mean,
+      sil_sd           = x$sil_sd,
+      sil_se           = x$sil_se,
+      sil_ci95_low     = x$sil_ci95_low,
+      sil_ci95_hi      = x$sil_ci95_hi,
+      ari_mean         = x$ari_mean,
+      ari_sd           = x$ari_sd,
+      ari_se           = x$ari_se,
+      ari_ci95_low     = x$ari_ci95_low,
+      ari_ci95_hi      = x$ari_ci95_hi,
       stringsAsFactors = FALSE
     )
   })
 )
+df_summary <- df_summary[order(df_summary$resolution), ]
 
-df_boot <- do.call(
+df_boot_sil <- do.call(
   rbind,
   lapply(results_list, function(x) {
     data.frame(
@@ -347,35 +392,44 @@ df_boot <- do.call(
     )
   })
 )
-df_boot$resolution <- as.numeric(df_boot$resolution)
-df_summary <- df_summary[order(df_summary$resolution), ]
-df_boot    <- df_boot[order(df_boot$resolution), ]
+df_boot_sil$resolution <- as.numeric(df_boot_sil$resolution)
+df_boot_sil <- df_boot_sil[order(df_boot_sil$resolution), ]
 
-# ---- Pick optimal resolution (best mean silhouette; ties -> fewer clusters) ----
-best_idx <- which(df_summary$sil_mean == max(df_summary$sil_mean, na.rm = TRUE))
-if (length(best_idx) > 1L) {
-  # break ties by minimizing number of clusters
-  best_idx <- best_idx[which.min(df_summary$n_clusters[best_idx])]
-}
-optimal_resolution <- df_summary$resolution[best_idx]
-
-# Re-run final clustering at optimal resolution and store
-SeuratObj <- FindClusters(
-  SeuratObj,
-  resolution = optimal_resolution,
-  algorithm  = 4,
-  random.seed = random_seed,
-  verbose = FALSE
+df_boot_ari <- do.call(
+  rbind,
+  lapply(results_list, function(x) {
+    if (length(x$ari_pairs)) {
+      data.frame(resolution = x$resolution, ari_pair = x$ari_pairs)
+    } else {
+      NULL
+    }
+  })
 )
-SeuratObj$leiden_clusters <- Idents(SeuratObj)
 
-## ---- Visulizations
+# ---- Pick optimal resolution
+# Primary: max silhouette; tie-breaker: higher ARI; then fewer clusters
+best_sil <- max(df_summary$sil_mean, na.rm = TRUE)
+cand     <- which(df_summary$sil_mean >= (best_sil - 1e-12))
+if (length(cand) > 1) {
+  ari_sub <- df_summary$ari_mean[cand]
+  if (all(is.na(ari_sub))) {
+    cand <- cand[which.min(df_summary$avg_n_clusters[cand])]
+  } else {
+    best_ari <- max(ari_sub, na.rm = TRUE)
+    cand2    <- cand[which(ari_sub >= (best_ari - 1e-12))]
+    if (length(cand2) > 1) {
+      cand <- cand2[which.min(df_summary$avg_n_clusters[cand2])]
+    } else {
+      cand <- cand2
+    }
+  }
+}
+optimal_resolution <- df_summary$resolution[cand]
 
-# 1) Silhouette mean ± 95% CI vs resolution
+# ---- Visualizations
 p1 <- ggplot(df_summary, aes(x = resolution, y = sil_mean)) +
   geom_ribbon(aes(ymin = sil_ci95_low, ymax = sil_ci95_hi), alpha = 0.15) +
-  geom_line(size = 0.9) +
-  geom_point(size = 2) +
+  geom_line(size = 0.9) + geom_point(size = 2) +
   geom_vline(xintercept = optimal_resolution, linetype = 2) +
   labs(title = "Leiden resolution optimization (bootstrapped silhouette)",
        x = "Resolution", y = "Mean silhouette (±95% CI)") +
@@ -383,8 +437,7 @@ p1 <- ggplot(df_summary, aes(x = resolution, y = sil_mean)) +
   theme(panel.grid.minor = element_blank(),
         plot.title = element_text(face = "bold"))
 
-# 2) Violin + jitter of bootstrap silhouettes per resolution
-p2 <- ggplot(df_boot, aes(x = factor(resolution), y = sil_boot, group = factor(resolution))) +
+p2 <- ggplot(df_boot_sil, aes(x = factor(resolution), y = sil_boot, group = factor(resolution))) +
   geom_violin(trim = TRUE, width = 0.9) +
   geom_jitter(width = 0.08, alpha = 0.3, size = 0.6) +
   geom_hline(yintercept = 0, linetype = 3) +
@@ -394,40 +447,92 @@ p2 <- ggplot(df_boot, aes(x = factor(resolution), y = sil_boot, group = factor(r
   theme(panel.grid.minor = element_blank(),
         plot.title = element_text(face = "bold"))
 
-# 3) Number of clusters vs resolution + tiny cluster %
-p3 <- ggplot(df_summary, aes(x = resolution, y = n_clusters)) +
-  geom_line(size = 0.9) +
-  geom_point(size = 2) +
+p3 <- ggplot(df_summary, aes(x = resolution, y = avg_n_clusters)) +
+  geom_line(size = 0.9) + geom_point(size = 2) +
   geom_vline(xintercept = optimal_resolution, linetype = 2) +
-  labs(title = "Model complexity",
-       x = "Resolution", y = "# clusters") +
-  theme_bw(base_size = 12) +
-  theme(
-    panel.grid.minor = element_blank(),
-    plot.title = element_text(face = "bold"))
-
-p3b <- ggplot(df_summary, aes(x = resolution, y = pct_tiny_clusters)) +
-  geom_line(size = 0.9) +
-  geom_point(size = 2) +
-  geom_vline(xintercept = optimal_resolution, linetype = 2) +
-  labs(title = paste0("Tiny clusters (<", tiny_cluster_n, " cells)"),
-       x = "Resolution", y = "% tiny clusters") +
+  labs(title = "Model complexity", x = "Resolution", y = "Avg # clusters") +
   theme_bw(base_size = 12) +
   theme(panel.grid.minor = element_blank(),
         plot.title = element_text(face = "bold"))
 
-# 4) Final clustering UMAP
-p4 <- DimPlot(SeuratObj,
-              reduction = reduction_for_plot,
-              group.by = "leiden_clusters",
-              label = TRUE, repel = TRUE) + 
-          theme (plot.title = element_blank())
+p3b <- ggplot(df_summary, aes(x = resolution, y = avg_pct_tiny)) +
+  geom_line(size = 0.9) + geom_point(size = 2) +
+  geom_vline(xintercept = optimal_resolution, linetype = 2) +
+  labs(title = paste0("Tiny clusters (<", tiny_cluster_n, " cells)"),
+       x = "Resolution", y = "% tiny clusters (avg)") +
+  theme_bw(base_size = 12) +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold"))
 
-# Combine overview figure
-overview <- (p1 / p2) | (p3 / p3b)
-overview
+p5 <- ggplot(df_summary, aes(x = resolution, y = ari_mean)) +
+  geom_ribbon(aes(ymin = ari_ci95_low, ymax = ari_ci95_hi), alpha = 0.15) +
+  geom_line(size = 0.9) + geom_point(size = 2) +
+  geom_vline(xintercept = optimal_resolution, linetype = 2) +
+  labs(title = "Cluster stability (pairwise ARI across bootstraps)",
+       x = "Resolution", y = "Mean ARI (±95% CI)") +
+  theme_bw(base_size = 12) +
+  theme(panel.grid.minor = element_blank(),
+        plot.title = element_text(face = "bold"))
+
+( (p1 / p2) | (p3 / p3b) ) + patchwork::plot_layout(guides = "collect")
+p5
+```
+
+
+## Assign final clusters to all cells 
+
+We take the best bootstrap at the optimal resolution, compute centroids in the embedding, and classify all cells by nearest centroid.
+
+```{r}
+best_res_key <- as.character(optimal_resolution)
+sil_vec <- results_list[[best_res_key]]$sil_boot
+
+best_bi <- which.max(sil_vec)
+
+# Re-run that specific bootstrap to get its clustering & centroids
+set.seed(random_seed + best_bi)
+cells_graph <- .sample_cells(n_graph_cells, all_cells)
+best_sub    <- run_leiden_on_subset(SeuratObj, cells_graph, optimal_resolution)$object
+ids_best    <- Idents(best_sub) # factor with names = cells_graph
+
+# Centroids in embedding space
+emb_best <- Embeddings(best_sub, reduction = reduction_for_dist)[, dims_use, drop = FALSE]
+centroid_mat <- do.call(rbind, lapply(split(emb_best, ids_best), function(m) {
+  m <- as.matrix(m)
+  colMeans(matrix(m, ncol = ncol(emb_best)))
+}))
+centroid_labels <- rownames(centroid_mat)
+
+# Assign all cells by nearest centroid (fast)
+assign_by_centroid <- function(emb_all, centroids, chunk = 100000L) {
+  n <- nrow(emb_all)
+  idx <- vector("integer", length = n)
+  rn  <- rownames(emb_all)
+  for (start in seq(1, n, by = chunk)) {
+    end <- min(n, start + chunk - 1L)
+    q <- emb_all[start:end, , drop = FALSE]
+    nn <- FNN::knnx.index(data = centroids, query = q, k = 1)
+    idx[start:end] <- nn[, 1]
+  }
+  factor(centroid_labels[idx], levels = centroid_labels, labels = centroid_labels, ordered = FALSE)
+}
+
+final_labels <- assign_by_centroid(emb_all = emb_all, centroids = centroid_mat)
+names(final_labels) <- rownames(emb_all)
+
+SeuratObj$leiden_clusters <- final_labels
+
+# UMAP colored by final labels
+p4 <- DimPlot(
+  SeuratObj,
+  reduction = reduction_for_plot,
+  group.by  = "leiden_clusters",
+  label = TRUE, repel = TRUE
+) + theme(plot.title = element_blank())
+
 p4
 
-# Save the final object with clustering information
+# Save
 saveRDS(SeuratObj, "./data/integratedSeuratObject.rds")
 ```
+
