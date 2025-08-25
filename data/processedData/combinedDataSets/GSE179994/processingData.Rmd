@@ -1,24 +1,18 @@
 ---
-title: Processing Combined Data: GSE179994
-author: 
-- name: Nick Borcherding
-  email: ncborch@gmail.com
-  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
-date: "March 3rd, 2022"
-output:
-  BiocStyle::html_document:
-    toc_float: true
-
+title: "Processing Combined Data: GSE179994"
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+output: rmarkdown::html_vignette
+theme: united
+df_print: kable
+vignette: >
+  %\VignetteIndexEntry{Processing Combined Data: GSE179994}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
-```{r, echo=FALSE, results="hide", message=FALSE}
-knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
-library(BiocStyle)
-```
+# Loading Libraries
 
-# Utility Workflow and Export
-
-```{r}
+```{r eval=FALSE, tidy=FALSE}
 suppressPackageStartupMessages(library(Seurat))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(dplyr))
@@ -37,8 +31,10 @@ suppressPackageStartupMessages(library(patchwork))
 
 # Preparing the Uploaded Data
 
-```{r}
-library(dplyr)
+```{r eval=FALSE, tidy=FALSE}
+##########################
+#Loading TCRs and Meta Data
+###########################
 dat <- read.table(gzfile("GSE179994_all.scTCR.tsv.gz"), header = TRUE)
 meta <- read.table(gzfile("GSE179994_Tcell.metadata.tsv.gz"), header = TRUE)
 
@@ -90,11 +86,10 @@ for (i in 2:length(cloneSize)) {
 }
 
 processed.data <- processed.data[,c("CTgene", "CTnt", "CTaa", "CTstrict", "clonalFrequency", "clonalProportion", "cloneSize")]
+
 #################
 #RNA processing 
 #################
-
-
 options(Seurat.object.assay.version = "v5")
 RNA.dat <- readRDS(gzfile("GSE179994_all.Tcell.rawCounts.rds.gz"))
 RNA.dat <-  CreateSeuratObject(RNA.dat)
@@ -111,9 +106,9 @@ RNA.dat$orig.ident <- names$run
 RNA.dat <- AddMetaData(RNA.dat, processed.data)
 ```
 
-# Getting Porcessed Sequencing Runs
+# Getting Processed Sequencing Runs
 
-```{r}
+```{r eval=FALSE, tidy=FALSE}
 HPCA <- HumanPrimaryCellAtlasData()
 Monaco <- MonacoImmuneData()
 
@@ -124,8 +119,11 @@ directory <- readxl::read_xlsx("~/Documents/GitHub/utility/summaryInfo/sample.di
 directory <- directory[directory$Cohort == "GSE179994",]
 
 utility.sample.id <- directory$SampleLabel
-list <- SplitObject(RNA.dat, split.by = "orig.ident")
 
+################################
+#Looping through sequencing runs
+###############################
+list <- SplitObject(RNA.dat, split.by = "orig.ident")
 for (i in seq_along(list)){
     tmp <- list[[i]]
 

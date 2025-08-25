@@ -2,29 +2,30 @@
 
 ## Comprehensive collection of Single-Cell Tumor-Infiltrating Lymphocyte Data
 
-<img align="right" src="https://github.com/ncborcherding/utility/blob/dev/www/utility_hex.png" width="305" height="352">
+<img align="right" src="https://github.com/ncborcherding/utility/blob/main/www/utility_hex.png" width="305" height="352">
 
 ### Introduction
 The original intent of assembling a data set of publicly-available tumor-infiltrating T cells (TILs) with paired TCR sequencing was to expand 
 and improve the [scRepertoire](https://github.com/ncborcherding/scRepertoire) R package. However, after some discussion, we decided to release 
 the data set for everyone, a complete summary of the sequencing runs and the sample information can be found in the meta data of the Seurat object. 
 
-An explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
+This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 3) iterating through automatic annotation, 
+and 4) adding the TCR information. This information is stored in the meta data of the Seurat objects - 
+an explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
 
-This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 
-3) iterating through automatic annotation, and 4) adding the TCR information. This information is stored in the meta data of the Seurat objects - an explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
 
 ### Folder Structure
 ```
-├── Data_conversion.Rmd
-├── NEWS.txt
-├── Processing_Utility.Rmd
-├── README.md
-├── Summarize_Data.Rmd
+├── code
+│   ├── Processing_Utility.Rmd - general processing script
+│   └── Summarize_Data.Rmd - script to get summary data
 ├── data
 │   ├── SequencingRuns - 10x Outputs
-│	└── processedData - Processed .rds and larger combined cohorts
-├── qc - plots for quality control purposes
+│   └── processedData - Processed .rds and larger combined cohorts
+├── NEWS.txt - changes made
+├── outputs
+│   └── qc - plots for quality control purposes
+├── README.md
 └── summaryInfo
     ├── TcellSummaryTable.csv
     ├── cohortSummaryTable.csv
@@ -32,11 +33,13 @@ This involves several steps 1) loading the respective GE data, 2) harmonizing th
     ├── sample.directory.xlsx - all the available data for the cohort
     ├── sessionInfo.txt - what I am running in terms of the pipeline
     └── tumorSummaryTable.csv
+
 ```
 
 ### Sample ID:
 
-<img align="center" src="https://github.com/ncborcherding/utility/blob/dev/www/utility_info.png">
+<img align="center" src="https://github.com/ncborcherding/utility/blob/main/www/utility_info.png">
+
 
 #### Cohort Information
 Here is the current list of data sources, the number of cells that passed filtering by tissue type. **Please cite** the data if you are using uTILity.
@@ -78,7 +81,7 @@ Here is the current list of data sources, the number of cells that passed filter
 ### Methods
 
 #### Single-Cell Data Processing
-The filtered gene matrices output from Cell Ranger align function  from individual sequencing runs (10x Genomics, Pleasanton, CA) loaded into the R global environment. For each sequencing run cell barcodes were appended to contain a unique prefix to prevent issues with duplicate barcodes. The results were then ported into individual Seurat objects ([citation](https://pubmed.ncbi.nlm.nih.gov/34062119/)), where the cells with > 10% mitochondrial genes and/or 2x natural log distribution of counts were excluded for quality control purposes. At the individual sequencing run level, doublets were estimated using the scDblFinder (v1.4.0) R package. All the sequencing runs across experiments were merged into a single Seurat Object using the merge() function. All the data was then normalized using the default settings and 2,000 variable genes were identified using the "vst" method. Next the data was scaled with the default settings and principal components were calculated for 40 components. 
+The filtered gene matrices output from Cell Ranger align function  from individual sequencing runs (10x Genomics, Pleasanton, CA) loaded into the R global environment. For each sequencing run cell barcodes were appended to contain a unique prefix to prevent issues with duplicate barcodes. The results were then ported into individual Seurat objects ([citation](https://pubmed.ncbi.nlm.nih.gov/34062119/)), where the cells with > 10% mitochondrial genes and/or 2.5x standard deviation from the mean of features were excluded for quality control purposes. At the individual sequencing run level, doublets were estimated using the scDblFinder (v1.4.0) R package. 
 
 #### Annotation of Cells
 
@@ -89,6 +92,7 @@ Automatic annotation was performed using the singler (v2.2.0) R package ([citati
 The filtered contig annotation T cell receptor (TCR) data for available sequencing runs were loaded into the R global environment. Individual contigs were combined using the combineTCR() function of scRepertoire (v2.0.0) R Package ([citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)). Clonotypes were assigned to barcodes and were multiple duplicate chains for individual cells were filtered to select for the top expressing contig by read count. The clonotype data was then added to the Seurat Object with proportion across individual patients being used to calculate frequency.
 
 #### Session Info
+
 
 Session Info for the initial data processing and analysis can be found [here](https://github.com/ncborcherding/utility/blob/main/summaryInfo/sessionInfo.txt).
 

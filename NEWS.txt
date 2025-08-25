@@ -1,4 +1,21 @@
 ##########################
+#Changes to Version 1.0.0
+#########################
+Data Set Changes
+* Added GSE168844, GSE211504, GSE212217, GSE215219, GSE227708, GSE242477
+
+Processing Data Workflow Changes
+* Reprocessed all data for Seurat v5
+* Added Azimuth for automated annotation
+* Refined issues with PRJNA705464 and colorectal sample names
+
+To Do List:
+* Single cell object representation with all T cells
+* Finalized clustering
+* Annotate clusters
+* Trex Dimensionall Reduction
+
+##########################
 #Changes to Version 0.0.6
 #########################
 Data Set Changes

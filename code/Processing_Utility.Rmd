@@ -1,14 +1,13 @@
 ---
-title: uTILity, a collection of publically-available tumor-infiltrating T-cells and other tissue types, v1.
-author: 
-- name: Nick Borcherding
-  email: ncborch@gmail.com
-  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
-date: "November 2nd, 2023"
-output:
-  BiocStyle::html_document:
-    toc_float: true
-
+title: "uTILity: General Data Processing"
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+output: rmarkdown::html_vignette
+theme: united
+df_print: kable
+vignette: >
+  %\VignetteIndexEntry{uTILity: General Data Processing}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r, echo=FALSE, results="hide", message=FALSE}
@@ -18,13 +17,9 @@ library(BiocStyle)
 
 # Introduction
 
-The original intent of assembling a data set of publicly-available tumor-infiltrating T cells (TILs) with paired TCR sequencing was to expand and improve the [scRepertoire](https://github.com/ncborcherding/scRepertoire) R package. However, after some discussion, we decided to release the data set for everyone, a complete summary of the sequencing runs and the sample information can be found in the meta data of the Seurat object. Below is the code used for the initial processing and annotating of the data set (we are calling this version 0.0.1). This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 3) iterating through automatic annotation, 4) unifying annotation, and 5) adding the TCR information. 
+The original intent of assembling a data set of publicly-available tumor-infiltrating T cells (TILs) with paired TCR sequencing was to expand and improve the [scRepertoire](https://github.com/ncborcherding/scRepertoire) R package. However, after some discussion, we decided to release the data set for everyone, a complete summary of the sequencing runs and the sample information can be found in the meta data of the Seurat object.
 
-As of the initial release, there are 538,346 cells that passed the initial filtering with approximately 65% TIL of T cell origin, estimated by the annotators. Of these total cells approximately 75% (~257,000 T cells) had recoverable TCR information. The final Seurat object, **filtered_seuratObjects_harmony.rds** compressed is just over 4 GB, uncompressed and in the R global environment it is > 26 GB. Please consider the memory capacity of the computer you will use to analyze this data. 
-
-## Future Directions  
-
-It is our intent to update this file periodically as more data become available, we will use version control to track the additions. We are also actively looking at hosting options to allow users to selectively download a portion of the data and also upload the their single-cell data to be incorporated into the centralized data set. **Please note** as it is our intention to expand the data, we are not assigning clusters to the cells, as these might change over time. If you are planning to cluster, please read through the [Harmony Tutorial](https://portals.broadinstitute.org/harmony/articles/quickstart.html#seurat) for advice on dimensional reductions.
+The code below is the general purpose variant for the vast majority of samples - there are cohorts that need to be de-multiplexed or separated from combined count matrices, these can be found in **/data/processedData/combinedDataSets**.
 
 ## Citation
 
@@ -57,12 +52,6 @@ suppressPackageStartupMessages(library(scran))
 suppressPackageStartupMessages(library(patchwork))
 ```
 
-I also like to set a color palette before I begin - this way all the colors are consistent throughout figures. 
-
-```{r}
-colorblind_vector <- colorRampPalette(viridis_pal(option = "B")(7))
-```
-
 ***
 
 # Loading and Processing the Data
@@ -71,7 +60,7 @@ colorblind_vector <- colorRampPalette(viridis_pal(option = "B")(7))
 ```{r eval=FALSE}
 dir.create("./qc")
 
-file_list <- list.files("./data/SequencingRuns")
+file_list <- list.files("~/Documents/GitHub/utility/data/SequencingRuns")
 
 ###########################
 #Load Annotation Reference
@@ -82,16 +71,15 @@ Monaco <- MonacoImmuneData()
 options(Seurat.object.assay.version = "v5")
 
 for (i in seq_along(file_list)){
-    tmp <-  Read10X_h5(paste0("./data/SequencingRuns/", file_list[i], "/matrix.h5"))
+    tmp <-  Read10X(paste0("~/Documents/GitHub/utility/data/SequencingRuns/", file_list[i]))
     if(inherits(tmp, "list")) {
       tmp <- tmp[[1]]
-      rownames(tmp) <- stringr::str_split(rownames(tmp), "_", simplify = TRUE)[,2]
-      tmp <- tmp[rownames(tmp) != "",]
+     # rownames(tmp) <- stringr::str_split(rownames(tmp), "_", simplify = TRUE)[,2]
+      #tmp <- tmp[rownames(tmp) != "",]
     }
    
     
     tmp <- CreateAssayObject(counts = tmp)
-    
     SeuratObj <-  CreateSeuratObject(counts = tmp, 
                                      assay = "RNA",
                                project = file_list[i])
@@ -109,7 +97,7 @@ for (i in seq_along(file_list)){
             pt.size = 0) + 
       theme(legend.position = "none") + 
       plot_layout(ncol =2)
-    ggsave(paste0("./qc/", file_list[i], ".pdf"), height = 8, width=8)
+    ggsave(paste0("~/Documents/GitHub/utility/outputs/qc/", file_list[i], ".pdf"), height = 8, width=8)
     
     
     ###########################
@@ -133,30 +121,19 @@ for (i in seq_along(file_list)){
     ###########################################
     #Seurat Azimuth Annotation
     ############################################
-    if(file_list[i] == "E.B.25.1") {
-      SeuratObj$predicted.celltype.l1.score <- NA
-      SeuratObj$predicted.celltype.l1 <- NA 
-      SeuratObj$predicted.celltype.l2.score <- NA
-      SeuratObj$predicted.celltype.l2 <- NA
-      SeuratObj$predicted.celltype.l3.score <- NA
-      SeuratObj$predicted.celltype.l3 <- NA
-      SeuratObj$mapping.score <- NA
-    } else {
-        SeuratObj <- NormalizeData(SeuratObj, verbose = FALSE)
-        SeuratObj <- ScaleData(SeuratObj, verbose = FALSE)
-        VariableFeatures(SeuratObj) <- getTopHVGs(as.SingleCellExperiment(SeuratObj), 
-                                            n=2000)
-        SeuratObj <- RunPCA(SeuratObj, verbose = FALSE, npcs = pca.dim)
-        SeuratObj<- RunUMAP(SeuratObj, dims = 1:30, verbose = FALSE)
-        SeuratObj <- FindNeighbors(object = SeuratObj, 
-                             features = VariableFeatures(SeuratObj), 
-                             verbose = FALSE)
-       
-       SeuratObj <- RunAzimuth(SeuratObj, 
-                          reference = "pbmcref",
-                          k.weight = pca.dim,
-                          verbose = FALSE)
-    }
+    SeuratObj <- NormalizeData(SeuratObj, verbose = FALSE)
+    SeuratObj <- ScaleData(SeuratObj, verbose = FALSE)
+    VariableFeatures(SeuratObj) <- getTopHVGs(as.SingleCellExperiment(SeuratObj), 
+                                        n=2000)
+    SeuratObj <- RunPCA(SeuratObj, verbose = FALSE)
+    SeuratObj<- RunUMAP(SeuratObj, dims = 1:30, verbose = FALSE)
+    SeuratObj <- FindNeighbors(object = SeuratObj, 
+                         features = VariableFeatures(SeuratObj), 
+                         verbose = FALSE)
+   
+   SeuratObj <- RunAzimuth(SeuratObj, 
+                      reference = "pbmcref",
+                      verbose = FALSE)
       
     #############################################
     #Singler Annotation of Cell Types
@@ -182,7 +159,7 @@ for (i in seq_along(file_list)){
     #Adding TCR clonotypes
     ######################################
     
-    TCR.file <- list.files(paste0("./data/SequencingRuns/", file_list[i]), pattern = "annotations")[1]
+    TCR.file <- list.files(paste0("~/Documents/GitHub/utility/data/SequencingRuns/", file_list[i]), pattern = "annotations")[1]
     if(is.na(TCR.file)) {
       SeuratObj$CTaa <- NA
       SeuratObj$CTnt <- NA
@@ -192,7 +169,7 @@ for (i in seq_along(file_list)){
       SeuratObj$clonalFrequency <- NA
       SeuratObj$cloneSize <- NA
     } else {
-      TCR.file <- read.csv(paste0("./data/SequencingRuns/", file_list[i], "/", TCR.file))
+      TCR.file <- read.csv(paste0("~/Documents/GitHub/utility/data/SequencingRuns/", file_list[i], "/", TCR.file))
       combinedObject <- combineTCR(TCR.file, 
                                    samples = file_list[i], 
                                    filterMulti = TRUE)
@@ -211,62 +188,12 @@ for (i in seq_along(file_list)){
     #################################
     #Saving Preliminary Seurat Object
     #################################
-    saveRDS(SeuratObj, paste0("./data/", file_list[i], ".rds"))
+    saveRDS(SeuratObj, paste0("~/Documents/GitHub/utility/data/processedData/seuratObjects/", file_list[i], ".rds"))
     rm(SeuratObj)
     rm(tmp)
     gc()
 }
-#FU on 
-#C.N.3.1
-#C.N.3.2
-#C.N.4.1
-#M.B.2
-#m.b.8
-#"R.T.11.1"
-
 ```
-
-
-
-
-# Banner Image Summary
-```{r}
-library(patchwork)
-
-set.seed(123)
-mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(list$Tissue)))
-plot1 <- DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "Tissue") + 
-  theme_void() +
-  scale_color_manual(values = mycolors) + 
-  theme(plot.title = element_blank(), 
-        legend.text=element_text(size=6)) 
-
-mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(length(unique(list$DICE.pruned.labels)))
-
-plot2 <- DimPlot(list, cells = rownames(list[[]])[sample(nrow(list[[]]), 40000)], group.by = "DICE.pruned.labels") + 
-  theme_void()+
-  scale_color_manual(values = mycolors) + 
-  theme(plot.title = element_blank(), 
-        legend.text=element_text(size=6)) 
-
-breakdown <- as.data.frame(table(list$Type, list$Tissue))
-mycolors <- colorRampPalette(brewer.pal(8, "Set1"))(8)
-plot3 <- ggplot(breakdown, aes(x=Var2, y = Freq, fill = Var1)) + 
-  geom_bar(stat = "identity", position = "fill") + 
-  scale_x_discrete(limits = rev(levels(breakdown$Var2))) +
-  ylab("Proportion of Cells") + 
-  labs(fill='Tissues') +
-  scale_fill_manual(values = mycolors) + 
-  theme_classic() + 
-  coord_flip() + 
-  theme(axis.title.y = element_blank(), 
-        axis.ticks.x = element_blank(),
-        axis.text.x = element_blank(), legend.text=element_text(size=6))
-
-plot1 + plot2 + plot3 + plot_layout(widths = c(3, 3, 1))
-ggsave("./UMAP/banner.jpg", height = 4, width = 10, dpi = 600)
-```
-
 
 # Conclusions
 

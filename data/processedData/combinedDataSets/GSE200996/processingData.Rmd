@@ -1,44 +1,16 @@
 ---
-title: utility, a collection of publically-available tumor-infiltrating T-cells and other tissue types, v0.0.1.
-author: 
-- name: Nick Borcherding
-  email: ncborch@gmail.com
-  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
-date: "March 30th, 2022"
-output:
-  BiocStyle::html_document:
-    toc_float: true
-
+title: "Processing Combined Data: 200996"
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+output: rmarkdown::html_vignette
+theme: united
+df_print: kable
+vignette: >
+  %\VignetteIndexEntry{Processing Combined Data: 200996}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
-```{r, echo=FALSE, results="hide", message=FALSE}
-knitr::opts_chunk$set(error=FALSE, message=FALSE, warning=FALSE)
-library(BiocStyle)
-```
-
-# Introduction
-
-The original intent of assembling a data set of publicly-available tumor-infiltrating T cells (TILs) with paired TCR sequencing was to expand and improve the [scRepertoire](https://github.com/ncborcherding/scRepertoire) R package. However, after some discussion, we decided to release the data set for everyone, a complete summary of the sequencing runs and the sample information can be found in the meta data of the Seurat object. Below is the code used for the initial processing and annotating of the data set (we are calling this version 0.0.1). This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 3) iterating through automatic annotation, 4) unifying annotation, and 5) adding the TCR information. 
-
-As of the initial release, there are 538,346 cells that passed the initial filtering with approximately 65% TIL of T cell origin, estimated by the annotators. Of these total cells approximately 75% (~257,000 T cells) had recoverable TCR information. The final Seurat object, **filtered_tmpects_harmony.rds** compressed is just over 4 GB, uncompressed and in the R global environment it is > 26 GB. Please consider the memory capacity of the computer you will use to analyze this data. 
-
-## Future Directions  
-
-It is our intent to update this file periodically as more data become available, we will use version control to track the additions. We are also actively looking at hosting options to allow users to selectively download a portion of the data and also upload the their single-cell data to be incorporated into the centralized data set. **Please note** as it is our intention to expand the data, we are not assigning clusters to the cells, as these might change over time. If you are planning to cluster, please read through the [Harmony Tutorial](https://portals.broadinstitute.org/harmony/articles/quickstart.html#seurat) for advice on dimensional reductions.
-
-## Citation
-
-utility is not published nor has it gone through peer review. If utilizing the data, please cite the corresponding data sets. This can be found under **"Cohort"** in the meta data.
-
-## Questions or Comments
-
-Questions, comments, suggestions, please feel free to contact Nick Borcherding via this repository, [email](mailto:ncborch@gmail.com), or using [twitter](https://twitter.com/theHumanBorch). **Also** if you are interested in dimensional reduction of TCR sequencing data, please get in touch as that is the intent of the assembled data and we would love to talk more!
-
-***
-
 # Loading Libraries
-
-In general I like to load libraries here that we will use universally or during the intitation process, and then call other libraries when we need them in the code chunks that are relevant. 
 
 ```{r}
 suppressPackageStartupMessages(library(Seurat))
@@ -57,17 +29,12 @@ suppressPackageStartupMessages(library(scran))
 suppressPackageStartupMessages(library(patchwork))
 ```
 
-***
+# Individual Sequencing Run Processing
 
-# Loading and Processing the Data
-
-## Load, filter and combine Data
-```{r eval=FALSE}
+```{r eval=FALSE, tidy=FALSE}
 dir.create("./qc")
 
 file_list <- list.files("./data/")
-
-
 
 ###########################
 #Load Annotation Reference
@@ -77,8 +44,7 @@ Monaco <- MonacoImmuneData()
 
 options(Seurat.object.assay.version = "v5")
 
-#for (i in seq_along(file_list)){
-for(i in 19:26) {
+for (i in seq_along(file_list)){
     mtx <- list.files(paste0("./data/", file_list[i]), pattern = "h5")
     tmp <-  Read10X_h5(paste0("./data/", file_list[i], "/", mtx))
 
@@ -97,7 +63,7 @@ for(i in 19:26) {
             pt.size = 0) + 
       theme(legend.position = "none") + 
       plot_layout(ncol =2)
-    ggsave(paste0("./qc/", file_list[i], ".pdf"), height = 8, width=8)
+    ggsave(paste0("~/Documents/GitHub/utility/outputs/qc/", file_list[i], ".pdf"), height = 8, width=8)
     
     
     ###########################
@@ -174,14 +140,16 @@ for(i in 19:26) {
     #################################
     #Saving Preliminary Seurat Object
     #################################
-    saveRDS(tmp, paste0("./data/processedData/", file_list[i], ".rds"))
+    saveRDS(tmp, paste0("~/Documents/GitHub/utility/data/processedData/seuratObjects/processedData/", file_list[i], ".rds"))
     rm(tmp)
     gc()
     
 }
 ```
 
-```{r}
+# Mutiplexed Sequencing Run Processing
+
+```{r eval=FALSE, tidy=FALSE}
 file_list <- list.files("./multiplexed_data", pattern = ".h5")
 exceptions <- file_list[(length(file_list)-3):length(file_list)]
 TCR_list <- list.files("./multiplexed_data", pattern = ".csv")
@@ -231,11 +199,14 @@ for (i in seq_along(file_list)){
     pbmc.hashtag <- HTODemux(pbmc.hashtag, assay = "HTO", positive.quantile = 0.99)
     pbmc.hashtag <- subset(pbmc.hashtag, hash.ID != "Doublet")
     
+    ####################################
+    #This is assigning the sample by HTO
+    ####################################
     hash.reference <- hash.directory[,file_list[i]]
     names(hash.reference) <- paste0(paste0("Hashtag", 1:7), "-TotalSeqC")
-    
     pbmc.hashtag$orig.ident <- as.vector(hash.reference[pbmc.hashtag$hash.ID])
     pbmc.hashtag <- subset(pbmc.hashtag, orig.ident != "")
+    
     
     pbmc.hashtag <- SplitObject(pbmc.hashtag, split.by = "orig.ident")
     
@@ -251,7 +222,7 @@ for (i in seq_along(file_list)){
                 pt.size = 0) + 
           theme(legend.position = "none") + 
           plot_layout(ncol =2)
-        ggsave(paste0("./qc/", tmp$orig.ident[1], ".pdf"), height = 8, width=8)
+        ggsave(paste0("~/Documents/GitHub/utility/outputs/qc/", tmp$orig.ident[1], ".pdf"), height = 8, width=8)
         
         ###########################
         #Here is the filtering step

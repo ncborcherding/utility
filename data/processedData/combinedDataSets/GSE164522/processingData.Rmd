@@ -1,18 +1,18 @@
 ---
-title: Processing Combined Data: GSE164522
-author: 
-- name: Nick Borcherding
-  email: ncborch@gmail.com
-  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
-date: "June 18, 2022
-output:
-  BiocStyle::html_document:
-    toc_float: true
-
+title: "Processing Combined Data: GSE164522"
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+output: rmarkdown::html_vignette
+theme: united
+df_print: kable
+vignette: >
+  %\VignetteIndexEntry{Processing Combined Data: GSE164522}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
+# Loading Libraries
 
-```{r}
+```{r eval=FALSE, tidy=FALSE}
 suppressPackageStartupMessages(library(Seurat))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(dplyr))
@@ -33,27 +33,36 @@ suppressPackageStartupMessages(library(stringr))
 
 # Getting Processed Sequencing Runs
 
-```{r}
+```{r eval=FALSE, tidy=FALSE}
+####################
+#Loading Annotations
+####################
 HPCA <- HumanPrimaryCellAtlasData()
 Monaco <- MonacoImmuneData()
 
+##########################
+#Loading TCRs and Meta Data
+###########################
 TCR <- read.csv("GSE164522_vdj_final.csv")
 meta <- read.csv("GSE164522_CRLM_metadata.csv")
 directory <- readxl::read_xlsx("~/Documents/GitHub/utility/summaryInfo/sample.directory.xlsx")
 
 meta$X <- stringr::str_replace_all(meta$X, "-", ".")
 
-colorectal.index <- c(4:13)
-ID.key <- c("patient08" = 4, 
-            "patient09" = 5,
-            "patient10" = 6,
-            "patient11" = 7,
-            "patient12" = 8, 
-            "patient13" = 9,
-            "patient14" = 10,
-            "patient15" = 11, 
-            "patient16" = 12, 
-            "patient17" = 13)
+########################
+#Setting up Loop for RNA
+########################
+colorectal.index <- c(3:12)
+ID.key <- c("patient08" = 3, 
+            "patient09" = 4,
+            "patient10" = 5,
+            "patient11" = 6,
+            "patient12" = 7, 
+            "patient13" = 8,
+            "patient14" = 9,
+            "patient15" = 10, 
+            "patient16" = 11, 
+            "patient17" = 12)
 tissue <- c("MN", "PBMC", "PT", "MT", "PN", "LN")
 tissue.key <- c("N", "B", "T", "M", "N", "L")
 for (i in seq_along(tissue)) {
@@ -195,9 +204,6 @@ for (i in seq_along(tissue)) {
       gc()
   }
 }
-
-  
-
 ```
 
 

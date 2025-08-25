@@ -1,19 +1,18 @@
 ---
-title: Processing Combined Data: EGAS00001004809
-author: 
-- name: Nick Borcherding
-  email: ncborch@gmail.com
-  affiliation: Washington University in St. Louis, School of Medicine, St. Louis, MO, USA
-date: "March 3rd, 2022"
-output:
-  BiocStyle::html_document:
-    toc_float: true
-
+title: "Processing Combined Data: EGAS00001004809"
+date: 'Compiled: `r format(Sys.Date(), "%B %d, %Y")`'
+output: rmarkdown::html_vignette
+theme: united
+df_print: kable
+vignette: >
+  %\VignetteIndexEntry{Processing Combined Data: EGAS00001004809
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
-# Utility Workflow and Export
+# Loading Libraries
 
-```{r}
+```{r eval=FALSE, tidy=FALSE}
 suppressPackageStartupMessages(library(Seurat))
 suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(dplyr))
@@ -32,8 +31,13 @@ suppressPackageStartupMessages(library(patchwork))
 
 # Preparing the Uploaded Data
 
-```{r}
+```{r eval=FALSE, tidy=FALSE}
+#sparse.merger used for combining 2 sparse matrices with different rownames
 source("~/Documents/GitHub/utility/R/sparse.merger.R")
+
+#####################
+#Processing the RNA
+####################
 RNA.dat.1 <- readRDS("1863-counts_cells_cohort1.rds")
 RNA.dat.2 <- readRDS("1867-counts_cells_cohort2.rds")
 RNA.dat <- merge.sparse(list(RNA.dat.1, RNA.dat.2))
@@ -52,6 +56,9 @@ names$run <- paste0(names$X1, "_", names$X2, "_", names$X3)
 RNA.dat$orig.ident <- names$run
 
 
+#####################
+#Processing the TCRs
+####################
 clones.1 <- read.csv("1879-BIOKEY_barcodes_vdj_combined_cohort1.csv")
 clones.1 <- clones.1[,c("barcode", "cdr3_aa", "cdr3_nt")]
 
@@ -86,6 +93,7 @@ processed.data$barcode <- clones$barcode
 processed.data <- processed.data[!grepl("TRB", processed.data$CTnt),]
 processed.data <- processed.data[!grepl("TRB", processed.data$CTaa),]
 
+#Getting clonal frequencies and proportions
 processed.data <- processed.data %>%
   group_by(sample, CTaa) %>%
   mutate(clonalFrequency = n()) %>%
@@ -98,16 +106,13 @@ rownames(processed.data) <- processed.data$barcode
 
 uniq.patients <- unique(processed.data$sample)
 
+#Binning clones by proportion
 cloneSize=c(None = 0, Rare = 1e-4, Small = 0.001, 
              Medium = 0.01, Large = 0.1, Hyperexpanded = 1)
-
-
 processed.data$cloneSize <- NA
 for (x in seq_along(cloneSize)) { names(cloneSize)[x] <- 
     paste0(names(cloneSize[x]), ' (', cloneSize[x-1], 
            ' < X <= ', cloneSize[x], ')') }
-
-
 
 for (i in 2:length(cloneSize)) { 
   processed.data$cloneSize <- ifelse(processed.data$clonalProportion > cloneSize[i-1] & processed.data$clonalProportion <= cloneSize[i], names(cloneSize[i]), processed.data$cloneSize) 
@@ -115,8 +120,7 @@ for (i in 2:length(cloneSize)) {
 
 processed.data <- processed.data[,c("CTgene", "CTnt", "CTaa", "CTstrict", "clonalFrequency", "clonalProportion", "cloneSize")]
 
-
-
+#Adding TCR data to Seurat Object
 cells <- rownames(RNA.dat[[]])
 cells <- stringr::str_remove(cells, "-1")
 RNA.dat <- RenameCells(RNA.dat, 
@@ -124,22 +128,27 @@ RNA.dat <- RenameCells(RNA.dat,
 RNA.dat <- AddMetaData(RNA.dat, processed.data)
 ```
 
+# Getting Processed Sequencing Runs
 
-# Getting Porcessed Sequencing Runs
-
-```{r include=FALSE}
+```{r eval=FALSE, tidy=FALSE}
+####################
+#Loading Annotations
+####################
 HPCA <- HumanPrimaryCellAtlasData()
 Monaco <- MonacoImmuneData()
 
+####################
+#Loading Directory
+####################
 directory <- readxl::read_xlsx("~/Documents/GitHub/utility/summaryInfo/sample.directory.xlsx") #Meta.data
 directory <- directory[directory$Cohort == "EGAS00001004809",]
 
 utility.sample.id <- directory$SampleLabel
 
-
+################################
+#Looping through sequencing runs
+###############################
 list <- SplitObject(RNA.dat, split.by = "orig.ident")
-
-
 for (i in seq_along(list)){
     tmp <- list[[i]]
 
@@ -160,7 +169,7 @@ for (i in seq_along(list)){
             pt.size = 0) + 
       theme(legend.position = "none") + 
       plot_layout(ncol =2)
-    ggsave(paste0("~/Documents/GitHub/utility/qc/", utility.sample.id[i], ".pdf"), height = 8, width=8)
+    ggsave(paste0("~/Documents/GitHub/utility/outputs/qc/", utility.sample.id[i], ".pdf"), height = 8, width=8)
     
     ###########################
     #Here is the filtering step
@@ -223,7 +232,6 @@ for (i in seq_along(list)){
     tmp@assays$RNA$scale.data <- NULL
     
     saveRDS(tmp, paste0("~/Documents/GitHub/utility/data/processedData/seuratObjects/", utility.sample.id[i], ".rds"))
-    
 }
 ```
 
