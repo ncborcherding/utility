@@ -1,0 +1,102 @@
+# config.yaml
+
+# 1. Paths and File Settings
+paths:
+  seurat_objects: "./data/processedData/seuratObjects/" # Path to individual Seurat objects
+  results_dir: "./results/"
+  figures_dir: "./figs/"
+  tmp_dir: "./tmp/" # For intermediate files like .h5ad
+  log_file: "./results/pipeline.log"
+
+# 2. Filtering (applied per-object before BPCells conversion)
+filtering:
+  run: true
+  filters:
+    # Each item is a filter condition applied to the metadata.
+    # Format: column, type, values
+    # `type` can be 'in' (keep values in list) or 'equals' (keep value)
+    - { column: "predicted.celltype.l1", type: "in", values: ["CD4 T", "CD8 T", "other T", "NK"] }
+    - { column: "db.class", type: "equals", values: "singlet" }
+    # Add more filters as needed, e.g., to filter by 'CTaa' if required.
+    # - { column: "CTaa", type: "not_na", values: null }
+
+# 3. Subsetting and Sketching (applied per-object after filtering)
+subset:
+  run: true
+  n_cells_total: 50000 # Total number of cells to subset/sketch to
+  method: "stratified" # "stratified" or "geometric"
+
+  # Settings for stratified sampling
+  stratified_sampling:
+    strata_cols: ["tissue", "orig.ident", "predicted.celltype.l2"]
+    min_cells_per_stratum: 10
+
+  # Settings for geometric sketching (placeholder, as implementation is complex)
+  geometric_sketching:
+    n_centroids: 1000
+
+# 3. Preprocessing
+preprocess:
+  n_variable_features: 3000
+
+# 4. Integration Methods: settings for each
+methods:
+  run: ["seurat_cca", "harmony", "fastmnn", "scvi", "scanvi"] # Which methods to run
+
+  seurat_cca:
+    use_rpca: false
+    n_dims: 30 # Number of PCs to compute on integrated assay
+
+  harmony:
+    group_by_vars: ["orig.ident"] # Variables to harmonize
+    theta: [2] # Diversity clustering penalty parameter
+    lambda: [1] # Ridge regression penalty parameter
+    max_iter_harmony: 10
+    n_dims: 30 # Number of Harmony components
+
+  fastmnn:
+    batch_var: "orig.ident"
+    n_dims: 30 # Number of corrected components
+
+  scvi:
+    n_latent: 30
+    n_layers: 2
+    n_hidden: 128
+    max_epochs: 400
+    learning_rate: 0.001
+    batch_size: 128
+
+  scanvi:
+    unlabeled_category: "Unknown" # Value for cells with no label
+    labels_key: "predicted.celltype.l2"
+    n_latent: 30
+    n_layers: 2
+    n_hidden: 128
+    max_epochs: 200
+    learning_rate: 0.001
+    batch_size: 128
+
+# 5. Post-integration Clustering and UMAP
+post_integration:
+  n_neighbors: 30
+  leiden_resolution: 1.0
+  n_dims_use: 30 # Number of dimensions from each method to use for UMAP/clustering
+
+# 6. Metrics
+metrics:
+  batch: ["asw_batch", "ilisi", "kbet_batch"]
+  label: ["nmi", "ari", "clisi", "kbet_label"]
+
+# 7. Ranking
+ranking:
+  w_batch: 0.6 # Weight for the batch correction score
+  w_label: 0.4 # Weight for the label conservation score
+
+# 8. Plotting
+plotting:
+  umap_dot_size: 0.1
+  umap_group_by: ["batch", "predicted.celltype.l2"]
+  palette: "viridis" # Color palette for plots
+
+# 9. Reproducibility
+seed: 42

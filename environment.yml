@@ -1,0 +1,22 @@
+name: sc-integration-benchmark
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    - scvi-tools
+    - scanpy
+    - anndata
+    - anndata[zarr]
+    - torch
+    - h5py
+    - "reticulate==1.34.0" # specific version for R compatibility
+    - pandas
+    - numpy
+    - matplotlib
+    - seaborn
+    - leidenalg
+    - python-igraph
+    - scikit-learn
