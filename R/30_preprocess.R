@@ -67,10 +67,25 @@ preprocess_bpcells_data <- function(bpcells_dir, config_path = "config.yaml") {
 
   object_list <- lapply(object_list, function(x) NormalizeData(x, verbose = FALSE))
 
-  per_sample_stats <- lapply(object_list, function(x) {
-    sce <- as.SingleCellExperiment(x, assay = "RNA")
-    assayNames(sce)[assayNames(sce) == "data"] <- "logcounts"
-    modelGeneVar(sce, assay.type = "logcounts")
+  per_sample_stats <- lapply(object_list, function(obj) {
+    counts_bp <- obj@assays$RNA@layers$counts
+    if (is.null(counts_bp)) counts_bp <- obj@assays$RNA@counts
+    
+    lib_sizes <- as.numeric(BPCells::colSums(counts_bp))
+    lib_sizes[lib_sizes == 0] <- 1
+    scale_factor <- median(lib_sizes)
+    
+    # Normalize (still on disk)
+    norm_bp <- t(t(counts_bp) / lib_sizes) * scale_factor
+    
+    # Materialize to sparse matrix before log1p
+    norm_mat <- as(norm_bp, "dgCMatrix")
+    logcounts <- log1p(norm_mat)
+    
+    sce <- SingleCellExperiment(assays = list(logcounts = logcounts))
+    diff <- scran::modelGeneVar(sce, assay.type = "logcounts")
+    diff@rownames <- rownames(obj)
+    return(diff)
   })
 
   # c. Combine variance and get top HVGs
