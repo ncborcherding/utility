@@ -27,6 +27,7 @@ integrate_fastmnn <- function(preprocessed_obj_path, config_path = "config.yaml"
 
   log_message("Loading preprocessed Seurat object from: ", preprocessed_obj_path)
   obj <- readRDS(preprocessed_obj_path)
+  obj <- JoinLayers(obj) # Join layers to extract for as.SingleCellExperiment()
 
   set.seed(config$seed)
 
