@@ -14,7 +14,7 @@ suppressPackageStartupMessages({
 source("R/00_utils.R")
 
 # --- Helper function for filtering ---
-apply_filters <- function(obj, filter_list) {
+apply_filters <- function(obj, filter_list, return.cells = F) {
   meta <- obj@meta.data
   cells_to_keep <- rep(TRUE, ncol(obj))
 
@@ -34,8 +34,11 @@ apply_filters <- function(obj, filter_list) {
       cells_to_keep <- cells_to_keep & !is.na(col_data)
     }
   }
-
-  return(subset(obj, cells = colnames(obj)[which(cells_to_keep)]))
+  if(return.cells) {
+    return(cells_to_keep)
+  } else {
+    return(subset(obj, cells = colnames(obj)[which(cells_to_keep)]))
+  }
 }
 
 
@@ -76,7 +79,12 @@ process_to_bpcells <- function(config_path = "config.yaml") {
     for (file in rds_files) {
       obj <- readRDS(file)
       if (filter_config$run) {
-        obj <- apply_filters(obj, filter_config$filters)
+        cell.idx <- which(apply_filters(obj, filter_config$filters, return.cells = T))
+        if(length(cell.idx) == 0) {
+          next()
+        } else {
+          obj <- apply_filters(obj, filter_config$filters)
+        }
       }
       file_cell_counts[[basename(file)]] <- ncol(obj)
       total_cells_after_filter <- total_cells_after_filter + ncol(obj)
@@ -92,7 +100,12 @@ process_to_bpcells <- function(config_path = "config.yaml") {
     # a. Apply filtering
     if (filter_config$run) {
       n_before <- ncol(obj)
-      obj <- apply_filters(obj, filter_config$filters)
+      cell.idx <- which(apply_filters(obj, filter_config$filters, return.cells = T))
+      if(length(cell.idx) == 0) {
+        next()
+      } else {
+        obj <- apply_filters(obj, filter_config$filters)
+      }
       log_message("Filtered from ", n_before, " to ", ncol(obj), " cells.")
     }
 
@@ -105,7 +118,7 @@ process_to_bpcells <- function(config_path = "config.yaml") {
     if (subset_config$run) {
       n_before_subset <- ncol(obj)
       prop_cells <- file_cell_counts[[basename(file)]] / total_cells_after_filter
-      n_to_sample <- round(prop_cells * subset_config$n_cells_total)
+      n_to_sample <- n_to_sample <- max(2, round(prop_cells * subset_config$n_cells_total))
 
       if (n_to_sample < n_before_subset) {
         cells_to_keep <- sample(colnames(obj), n_to_sample)
@@ -114,7 +127,7 @@ process_to_bpcells <- function(config_path = "config.yaml") {
       }
     }
 
-    if (ncol(obj) == 0) {
+    if (ncol(obj) <= 1) {
       log_message("Skipping sample ", sample_name, " as it has no cells after subsetting.")
       next
     }
