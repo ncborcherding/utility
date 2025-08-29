@@ -20,53 +20,36 @@ source("R/00_utils.R")
 # --- kBET Helper Function ---
 # A simplified implementation of the kBET concept.
 # Calculates the observed vs. expected batch frequencies in local neighborhoods.
-calculate_kbet <- function(emb, batch, k = 25) {
-  if (is.factor(batch)) batch <- droplevels(batch)
-
-  # 1. Find k-nearest neighbors for each cell
+calculate_kbet <- function(emb, batch, k = 25, alpha = 0.05) {
+  # coerce inputs
+  batch <- droplevels(as.factor(batch))
+  emb <- as.matrix(emb)
+  stopifnot(nrow(emb) == length(batch))
+  if (k > nrow(emb) - 1) stop("k must be <= nrow(emb) - 1")
+  
+  # 1) KNN
   knn_obj <- FNN::get.knn(emb, k = k)
-
-  # 2. For each cell's neighborhood, get the batch labels
-  batch_freq_observed <- apply(knn_obj$nn.index, 1, function(indices) {
-    table(batch[indices])
-  })
-
-  # 3. Calculate global batch frequencies
-  global_freq <- table(batch) / length(batch)
-
-  # 4. Perform chi-squared test for each neighborhood
-  # This is a simplification. The official kBET does more complex things.
-  # Here we just calculate the rejection rate of a simple test.
-  # A higher p-value means we cannot reject the null (it's well-mixed).
-
-  results <- sapply(1:nrow(emb), function(i) {
-    # Get observed counts for the neighborhood of cell i
-    obs_counts <- rep(0, length(levels(batch)))
-    names(obs_counts) <- levels(batch)
-
-    neighborhood_indices <- knn_obj$nn.index[i, ]
-    neighborhood_batches <- batch[neighborhood_indices]
-
-    tbl <- table(neighborhood_batches)
-    obs_counts[names(tbl)] <- tbl
-
-    # Expected counts based on global frequencies
-    expected_counts <- global_freq * k
-
-    # Chi-squared test
-    # Add a small epsilon to avoid division by zero or errors with 0 counts
-    test_result <- suppressWarnings(
-      chisq.test(x = obs_counts + 1e-6, p = global_freq + 1e-6)
+  
+  # 2) Global batch frequencies (proportions that sum to 1)
+  global_tab <- table(batch)
+  lev <- names(global_tab)
+  global_p <- as.numeric(global_tab) / sum(global_tab)   # sums to 1
+  
+  # 3) Per-neighborhood chi-squared goodness-of-fit tests
+  pvals <- vapply(seq_len(nrow(emb)), function(i) {
+    idx <- knn_obj$nn.index[i, ]
+    nb  <- factor(batch[idx], levels = lev)
+    obs <- as.numeric(table(nb))  # aligned to lev
+    
+    # Chi-squared test against global proportions
+    # rescale.p=TRUE guards against tiny rounding drift
+    suppressWarnings(
+      stats::chisq.test(x = obs, p = global_p, rescale.p = TRUE)$p.value
     )
-
-    return(test_result$p.value)
-  })
-
-  # Rejection rate at alpha = 0.05
-  rejection_rate <- mean(results < 0.05, na.rm = TRUE)
-
-  # Return the "acceptance rate" so higher is better
-  return(1 - rejection_rate)
+  }, numeric(1))
+  
+  # Return kBET-like acceptance rate (higher is better mixing)
+  1 - mean(pvals < alpha, na.rm = TRUE)
 }
 
 
