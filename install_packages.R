@@ -30,19 +30,19 @@ bioc_packages <- c(
   "batchelor",     # fastMNN integration
   "SingleCellExperiment", # Data structure for batchelor/scran
   "scran",         # HVG detection
-  "scDblFinder",   # Doublet detection (from original code)
-  "SingleR",       # Cell type annotation (from original code)
-  "celldex",       # Annotation references (from original code)
-  "Azimuth",       # Annotation (from original code)
+  "scDblFinder",   # Doublet detection 
+  "SingleR",       # Cell type annotation 
+  "celldex",       # Annotation references 
+  "Azimuth",       # Annotation 
   "SeuratData",    # For Azimuth references
   "BiocParallel",  # Parallel processing for Bioconductor
-  "HGNChelper"     # For gene symbol checking
+  "HGNChelper",     # For gene symbol checking
+  "scRepertoire"
 )
 
 # --- GitHub Packages ---
 github_packages <- c(
-  "ncborcherding/scRepertoire", # From original code
-  "immunogenomics/lisi"         # For LISI metric
+  "mengxu98/LISI"               # For LISI metric
 )
 
 # --- Installation Logic ---
