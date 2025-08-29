@@ -54,8 +54,7 @@ integrate_harmony <- function(preprocessed_obj_path, config_path = "config.yaml"
     vars_use  = method_config$group_by_vars,
     theta     = method_config$theta,
     lambda    = method_config$lambda,
-    max.iter.harmony = method_config$max_iter_harmony,
-    do_pca    = FALSE, # We are passing in a PCA, so no need to recalculate
+    max_iter = method_config$max_iter_harmony,
     verbose   = FALSE
   )
 
