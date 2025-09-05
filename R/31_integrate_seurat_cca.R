@@ -46,6 +46,7 @@ integrate_seurat_cca <- function(preprocessed_obj_path, config_path = "config.ya
     anchor.features = VariableFeatures(obj),
     reduction = reduction_method,
     dims = 1:method_config$n_dims,
+    k.filter = NA,
     verbose = FALSE
   )
 
