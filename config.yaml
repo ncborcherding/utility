@@ -55,8 +55,13 @@ methods:
     n_dims: 30 # Number of Harmony components
 
   fastmnn:
+    workers: 8
+    n_dims: 40
+    k: 20
+    ndist: 3
     batch_var: "orig.ident"
-    n_dims: 30 # Number of corrected components
+    hnsw_M: 16
+    hnsw_ef_search: 50
 
   scvi:
     n_latent: 30
