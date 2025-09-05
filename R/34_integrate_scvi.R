@@ -45,8 +45,8 @@ integrate_scvi <- function(preprocessed_obj_path, config_path = "config.yaml") {
   # scVI works on raw counts. We need to ensure the 'counts' slot is present.
   # The object from preprocessing should still have its original counts.
   DefaultAssay(obj) <- "RNA"
-  SaveH5AD(obj, h5ad_path, assay = "RNA", overwrite = TRUE)
-  log_message("Conversion complete.")
+  SaveH5Seurat(obj, filename = file.path(tmp_dir, "scvi_input.h5seurat"), overwrite = TRUE)
+  Convert(file.path(tmp_dir, "scvi_input.h5seurat"), dest = "h5ad", overwrite = TRUE)
 
   # --- 3. Reticulate Setup and Python Script Execution ---
   log_message("Setting up reticulate to use Conda environment 'sc-integration-benchmark'...")
