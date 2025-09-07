@@ -16,37 +16,115 @@ source("R/00_utils.R")
 
 # --- Main function ---
 integrate_scvi <- function(preprocessed_obj_path, config_path = "config.yaml") {
-
-  # --- 1. Read Config and Load Data ---
+  suppressPackageStartupMessages({
+    library(Seurat)
+    library(dplyr)
+    library(yaml)
+    library(reticulate)
+    # SeuratDisk not needed anymore for conversion
+  })
+  
+  source("R/00_utils.R")
+  
   log_message("--- Starting scVI Integration ---")
   log_message("Reading configuration from: ", config_path)
   config <- yaml::read_yaml(config_path)
-
+  
   paths <- config$paths
+  # Keep your batch var lookup as-is; ensure it's present in meta later
   batch_var <- config$methods$harmony$group_by_vars[1]
-
+  
   log_message("Loading preprocessed Seurat object from: ", preprocessed_obj_path)
   obj <- readRDS(preprocessed_obj_path)
-
-  set.seed(config$seed)
-
-  # --- 2. Data Conversion (Seurat -> AnnData) ---
-  integration_timer <- start_timer()
-
-  # Create a temporary directory for h5ad file if it doesn't exist
-  tmp_dir <- paths$tmp_dir
-  if (!dir.exists(tmp_dir)) {
-    dir.create(tmp_dir, recursive = TRUE)
-  }
-
-  h5ad_path <- file.path(tmp_dir, "scvi_input.h5ad")
-  log_message("Converting Seurat object to AnnData file at: ", h5ad_path)
-
-  # scVI works on raw counts. We need to ensure the 'counts' slot is present.
-  # The object from preprocessing should still have its original counts.
+  obj <- JoinLayers(obj)
   DefaultAssay(obj) <- "RNA"
-  SaveH5Seurat(obj, filename = file.path(tmp_dir, "scvi_input.h5seurat"), overwrite = TRUE)
-  Convert(file.path(tmp_dir, "scvi_input.h5seurat"), dest = "h5ad", overwrite = TRUE)
+  set.seed(config$seed)
+  
+  # ---- Validate counts and names ----
+  counts <- Seurat::GetAssayData(obj, assay = "RNA", slot = "counts")
+  if (is.null(counts) || nrow(counts) == 0)
+    stop("RNA@counts is missing or empty. scVI requires raw counts in X.")
+  
+  if (!inherits(counts, "dgCMatrix"))
+    counts <- as(counts, "dgCMatrix")
+  
+  cells <- colnames(obj)
+  genes <- rownames(obj)
+  
+  if (anyDuplicated(cells)) {
+    stop("Duplicated cell names detected in Seurat object. ",
+         "Please make them unique before conversion (e.g., `Cells(obj) <- make.unique(Cells(obj))`).")
+  }
+  # AnnData dislikes duplicated var_names; make unique if needed (doesn't affect X order)
+  genes_unique <- if (anyDuplicated(genes)) make.unique(genes) else genes
+  
+  # meta.data -> pandas.DataFrame (convert factors to strings for stability)
+  obs_df <- as.data.frame(obj@meta.data)
+  obs_df[] <- lapply(obs_df, function(x) if (is.factor(x)) as.character(x) else x)
+  rownames(obs_df) <- cells
+  if (!is.null(batch_var) && !(batch_var %in% colnames(obs_df))) {
+    warning("Batch variable '", batch_var, "' not found in meta.data; ensure your Python step sets a valid batch key.")
+  }
+  
+  log_message("Using Conda env 'sc-integration-benchmark' via reticulate...")
+  tryCatch({
+    reticulate::use_condaenv("sc-integration-benchmark", required = TRUE)
+    reticulate::py_config()
+  }, error = function(e) {
+    stop("Conda environment 'sc-integration-benchmark' not found. ",
+         "Create/activate it from your environment.yml. Error: ", e$message)
+  })
+  
+  # ---- Build AnnData directly (proper tuples!) ----
+  integration_timer <- start_timer()
+  
+  tmp_dir <- paths$tmp_dir
+  if (!dir.exists(tmp_dir)) dir.create(tmp_dir, recursive = TRUE)
+  h5ad_path <- file.path(tmp_dir, "scvi_input.h5ad")
+  log_message("Writing AnnData (counts -> X) to: ", h5ad_path)
+  
+  # ---- Build AnnData directly (proper orientation: cells x genes) ----
+  anndata <- reticulate::import("anndata", convert = FALSE)
+  sp      <- reticulate::import("scipy.sparse", convert = FALSE)
+  np      <- reticulate::import("numpy", convert = FALSE)
+  pd      <- reticulate::import("pandas", convert = TRUE)
+  
+  # dgCMatrix is CSC: p (indptr), i (indices), x (data)
+  indptr_py  <- np$array(as.integer(counts@p), dtype = "int64")     # length ncol+1  (cells+1)
+  indices_py <- np$array(as.integer(counts@i), dtype = "int64")     # row indices (genes)
+  data_py    <- np$array(as.numeric(counts@x), dtype = "float32")
+  
+  # 3-tuple for (data, indices, indptr) and 2-tuple for shape
+  triplet     <- reticulate::tuple(data_py, indices_py, indptr_py)
+  shape_tuple <- reticulate::tuple(as.integer(nrow(counts)), as.integer(ncol(counts)))  # genes x cells
+  
+  # Build CSC (genes x cells), then transpose to CSR (cells x genes)
+  X_csc <- sp$csc_matrix(triplet, shape = shape_tuple)
+  X     <- X_csc$transpose()$tocsr()  # <-- key line; now rows = cells
+  
+  # Sanity checks (fail early if sizes don't line up)
+  if (nrow(obj@meta.data) != ncol(counts)) {
+    stop("obs rows (cells) = ", nrow(obj@meta.data), 
+         " but counts has ", ncol(counts), " columns; they must match.")
+  }
+  if (length(genes_unique) != nrow(counts)) {
+    stop("Number of genes in var (", length(genes_unique), 
+         ") must equal nrow(counts) (", nrow(counts), ").")
+  }
+  
+  # Build obs / var with indices matching X
+  obs_df <- as.data.frame(obj@meta.data)
+  obs_df[] <- lapply(obs_df, function(x) if (is.factor(x)) as.character(x) else x)
+  rownames(obs_df) <- colnames(obj)  # cells
+  obs_py <- pd$DataFrame(obs_df, index = colnames(obj))
+  
+  var_df <- data.frame(feature_name = genes_unique,
+                       stringsAsFactors = FALSE, check.names = FALSE, row.names = genes_unique)
+  var_py <- pd$DataFrame(var_df)
+  
+  ad_obj <- anndata$AnnData(X = X, obs = obs_py, var = var_py)
+  ad_obj$write_h5ad(h5ad_path, compression = "gzip")
+  log_message("AnnData written successfully.")
 
   # --- 3. Reticulate Setup and Python Script Execution ---
   log_message("Setting up reticulate to use Conda environment 'sc-integration-benchmark'...")
