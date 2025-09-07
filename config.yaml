@@ -105,3 +105,24 @@ plotting:
 
 # 9. Reproducibility
 seed: 42
+
+# 10. Clustering
+clustering:
+  dims: [1, 30] # inclusive PCA dims used
+  graph_name: "SNN"
+  grid:
+    resolutions: [0.2, 0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0]
+    k_params: [20, 30, 40, 50]
+    prune_snn: [0.00, 0.05, 0.10]
+    weights: null # reserved for future (none/SCTransform, etc.)
+  stability:
+    subsample_frac: 0.8
+    n_repeats: 25
+  scoring_weights:
+    w_sil: 0.35
+    w_mod: 0.25
+    w_conn: 0.15
+    w_stab: 0.25
+    singleton_penalty: 0.05
+  parallel:
+    nworkers: 8 # used by the new clustering steps

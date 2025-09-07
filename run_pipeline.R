@@ -18,7 +18,8 @@ for (script in r_scripts) {
     source(script)
   }
 }
-source("R/00_utils.R") # Source utils again to ensure it's available
+source("R/00_utils.R") 
+source("R/00_clust_utils.R") 
 
 # --- 2. Command-Line Argument Parsing ---
 
@@ -86,9 +87,52 @@ run_pipeline <- function(config_path) {
 
   # Step 5: Rank methods based on all collected metrics
   log_message("=== Aggregating Metrics and Ranking Methods ===")
-  rank_methods(config_path)
-
-  # Step 6: Generate final summary plots
+  best_method <- rank_methods(config_path)   
+  log_message("Best integration method selected:", best_method)
+  
+  # Step 6: Run clustering optimization on the best method
+  log_message("=== Running Clustering Optimization on Best Method ===")
+  
+  # Locate integrated object from the best method
+  best_integrated_obj_path <- file.path(
+    config$paths$results_dir,
+    paste0("integrated_", best_method, ".rds")
+  )
+  
+  run_cluster_param_grid(
+    seurat_rds_path = best_integrated_obj_path,
+    dims = seq(config$clustering$dims[[1]], config$clustering$dims[[2]]),
+    graph_name = config$clustering$graph_name,
+    resolutions = config$clustering$grid$resolutions,
+    k_params = config$clustering$grid$k_params,
+    prune_snn = config$clustering$grid$prune_snn,
+    n_workers = config$parallel$nworkers
+  )
+  
+  run_cluster_stability(
+    seurat_rds_path = best_integrated_obj_path,
+    dims = seq(config$clustering$dims[[1]], config$clustering$dims[[2]]),
+    graph_name = config$clustering$graph_name,
+    subsample_frac = config$clustering$stability$subsample_frac,
+    n_repeats = config$clustering$stability$n_repeats,
+    n_workers = config$parallel$nworkers
+  )
+  
+  combine_and_score(
+    w_sil = config$clustering$scoring_weights$w_sil,
+    w_mod = config$clustering$scoring_weights$w_mod,
+    w_conn = config$clustering$scoring_weights$w_conn,
+    w_stab = config$clustering$scoring_weights$w_stab,
+    singleton_penalty = config$clustering$scoring_weights$singleton_penalty
+  )
+  
+  apply_best_clusters(
+    seurat_rds_in = best_integrated_obj_path,
+    dims = seq(config$clustering$dims[[1]], config$clustering$dims[[2]]),
+    graph_name = config$clustering$graph_name
+  )
+  
+  # Step 7: Generate final summary plots
   log_message("=== Generating Final Plots ===")
   generate_plots(config_path)
 
