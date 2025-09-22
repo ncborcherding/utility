@@ -41,11 +41,7 @@ preprocess:
 
 # 4. Integration Methods: settings for each
 methods:
-  run: ["seurat_cca", "harmony", "fastmnn", "scvi", "scanvi"] # Which methods to run
-
-  seurat_cca:
-    use_rpca: false
-    n_dims: 30 # Number of PCs to compute on integrated assay
+  run: ["harmony", "fastmnn", "scvi", "scanvi"] # Which methods to run 
 
   harmony:
     group_by_vars: ["orig.ident"] # Variables to harmonize
