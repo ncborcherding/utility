@@ -21,7 +21,6 @@ integrate_scvi <- function(preprocessed_obj_path, config_path = "config.yaml") {
     library(dplyr)
     library(yaml)
     library(reticulate)
-    # SeuratDisk not needed anymore for conversion
   })
   
   source("R/00_utils.R")
@@ -41,7 +40,7 @@ integrate_scvi <- function(preprocessed_obj_path, config_path = "config.yaml") {
   set.seed(config$seed)
   
   # ---- Validate counts and names ----
-  counts <- Seurat::GetAssayData(obj, assay = "RNA", slot = "counts")
+  counts <- methods::as(SeuratObject::LayerData(obj), "dgCMatrix")
   if (is.null(counts) || nrow(counts) == 0)
     stop("RNA@counts is missing or empty. scVI requires raw counts in X.")
   
