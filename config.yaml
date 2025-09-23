@@ -76,6 +76,9 @@ methods:
     check_val_every_n_epoch: 5  
 
   scanvi:
+    use_var_highly_variable: true        # honor var['highly_variable'] if present
+    hvg_n: null                          # null = do NOT recompute or cap; use your list as-is
+    hvg_flavor: "seurat_v3"  
     unlabeled_category: "Unknown" # Value for cells with no label
     labels_key: "predicted.celltype.l2"
     n_latent: 30
@@ -84,6 +87,11 @@ methods:
     max_epochs: 200
     learning_rate: 0.001
     batch_size: 128
+    precision: "32-true"               
+    accelerator: cpu                   
+    devices: 1
+    early_stopping: true
+    check_val_every_n_epoch: 5  
 
 # 5. Post-integration Clustering and UMAP
 post_integration:
