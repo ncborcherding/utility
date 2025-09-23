@@ -118,7 +118,9 @@ preprocess_bpcells_data <- function(bpcells_dir, config_path = "config.yaml") {
   log_message("Scaling data and running PCA...")
   obj <- ScaleData(obj, features = variable_features, verbose = FALSE)
   obj <- RunPCA(obj, features = variable_features, verbose = FALSE, npcs = 50)
-
+  
+  log_message("Joining Layers before saving...")
+  obj <- JoinLayers(obj)
   stop_timer(preprocess_timer, "BPCells Preprocessing")
 
   # --- 4. Save Preprocessed Object ---

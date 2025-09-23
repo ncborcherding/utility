@@ -27,7 +27,6 @@ integrate_scvi <- function(preprocessed_obj_path, config_path = "config.yaml") {
   
   log_message("Loading preprocessed Seurat object from: ", preprocessed_obj_path)
   obj <- readRDS(preprocessed_obj_path)
-  obj <- JoinLayers(obj)
   DefaultAssay(obj) <- "RNA"
   set.seed(config$seed)
   
