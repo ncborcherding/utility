@@ -1,6 +1,16 @@
 # R/00_utils.R
 # Helper functions for the integration benchmark pipeline
 
+# --- Transformations ---
+
+# Min-max normalization function
+min_max_norm <- function(x) {
+  if (max(x, na.rm = TRUE) == min(x, na.rm = TRUE)) {
+    return(rep(1, length(x)))
+  }
+  (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
+}
+
 # --- Logging and Timing ---
 
 #' Log a message with a timestamp

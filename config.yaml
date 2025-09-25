@@ -28,12 +28,8 @@ subset:
 
   # Settings for stratified sampling
   stratified_sampling:
-    strata_cols: ["tissue", "orig.ident", "predicted.celltype.l2"]
+    strata_cols: ["tissue", "orig.ident", "predicted.celltype.l1"]
     min_cells_per_stratum: 10
-
-  # Settings for geometric sketching (placeholder, as implementation is complex)
-  geometric_sketching:
-    n_centroids: 1000
 
 # 3. Preprocessing
 preprocess:
@@ -41,11 +37,7 @@ preprocess:
 
 # 4. Integration Methods: settings for each
 methods:
-  run: ["seurat_cca", "harmony", "fastmnn", "scvi", "scanvi"] # Which methods to run
-
-  seurat_cca:
-    use_rpca: false
-    n_dims: 30 # Number of PCs to compute on integrated assay
+  run: ["harmony", "fastmnn", "scvi", "scanvi"] # Which methods to run 
 
   harmony:
     group_by_vars: ["orig.ident"] # Variables to harmonize
@@ -64,22 +56,38 @@ methods:
     hnsw_ef_search: 50
 
   scvi:
-    n_latent: 30
+    use_var_highly_variable: true        # honor var['highly_variable'] if present
+    hvg_n: null                          # null = do NOT recompute or cap; use your list as-is
+    hvg_flavor: "seurat_v5"              # if we must compute HVGs and scanpy is installed
     n_layers: 2
     n_hidden: 128
-    max_epochs: 400
+    n_latent: 30
+    max_epochs: 200
     learning_rate: 0.001
-    batch_size: 128
+    batch_size: 64
+    precision: "32-true"                # "16-mixed", "bf16-mixed", or omit for CPU/older GPUs
+    accelerator: cpu                   # "auto"|"gpu"|"cpu"|"mps"
+    devices: 1
+    early_stopping: true
+    check_val_every_n_epoch: 5  
 
   scanvi:
+    use_var_highly_variable: true        # honor var['highly_variable'] if present
+    hvg_n: null                          # null = do NOT recompute or cap; use your list as-is
+    hvg_flavor: "seurat_v5"  
     unlabeled_category: "Unknown" # Value for cells with no label
-    labels_key: "predicted.celltype.l2"
+    labels_key: "predicted.celltype.l1"
     n_latent: 30
     n_layers: 2
     n_hidden: 128
     max_epochs: 200
     learning_rate: 0.001
-    batch_size: 128
+    batch_size: 64
+    precision: "32-true"               
+    accelerator: cpu                   
+    devices: 1
+    early_stopping: true
+    check_val_every_n_epoch: 5  
 
 # 5. Post-integration Clustering and UMAP
 post_integration:
@@ -100,13 +108,25 @@ ranking:
 # 8. Plotting
 plotting:
   umap_dot_size: 0.1
-  umap_group_by: ["batch", "predicted.celltype.l2"]
+  umap_group_by: ["batch", "predicted.celltype.l1"]
   palette: "viridis" # Color palette for plots
 
 # 9. Reproducibility
 seed: 42
 
-# 10. Clustering
+# 10 Memory Handling
+memory:
+  num_workers: 0        
+  pin_memory: false
+  min_cells_per_batch: 3
+  keep_layers: ["counts"]
+  drop_raw: true
+  drop_obsm: true
+  drop_obsp: true
+  drop_varm: true
+  drop_layers_except: true
+
+# 11. Clustering
 clustering:
   dims: [1, 30] # inclusive PCA dims used
   graph_name: "SNN"

@@ -71,6 +71,7 @@ run_pipeline <- function(config_path) {
 
     # 4a. Integration
     integration_func <- get(paste0("integrate_", method))
+    #preprocessed_obj_path <- "results/03_preprocessed_data/preprocessed_bpcells_object.rds"
     integrated_obj_path <- integration_func(preprocessed_obj_path, config_path)
 
     # 4b. Post-integration graph/UMAP

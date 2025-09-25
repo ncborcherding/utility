@@ -16,15 +16,6 @@ source("R/00_utils.R")
 
 # --- Main function ---
 integrate_scvi <- function(preprocessed_obj_path, config_path = "config.yaml") {
-  suppressPackageStartupMessages({
-    library(Seurat)
-    library(dplyr)
-    library(yaml)
-    library(reticulate)
-    # SeuratDisk not needed anymore for conversion
-  })
-  
-  source("R/00_utils.R")
   
   log_message("--- Starting scVI Integration ---")
   log_message("Reading configuration from: ", config_path)
@@ -36,17 +27,30 @@ integrate_scvi <- function(preprocessed_obj_path, config_path = "config.yaml") {
   
   log_message("Loading preprocessed Seurat object from: ", preprocessed_obj_path)
   obj <- readRDS(preprocessed_obj_path)
-  obj <- JoinLayers(obj)
   DefaultAssay(obj) <- "RNA"
   set.seed(config$seed)
   
+  # --- Reuse Seurat HVGs ---
+  hvg <- tryCatch(VariableFeatures(obj), error = function(e) character(0))
+  if (length(hvg) == 0L) {
+    message("No VariableFeatures() found; proceeding without precomputed HVGs.")
+  }
+  
+  # (optional) keep metadata lean: only columns you actually need in Python
+  keep_meta <- unique(c(
+    batch_var,
+    intersect(c("nCount_RNA","nFeature_RNA","percent.mt"), colnames(obj@meta.data))
+  ))
+  if (length(keep_meta) == 0L) keep_meta <- NULL
+  obs_df <- as.data.frame(obj@meta.data[, keep_meta, drop = FALSE])
+  obs_df[] <- lapply(obs_df, function(x) if (is.factor(x)) as.character(x) else x)
+  rownames(obs_df) <- colnames(obj)
+  
+  
   # ---- Validate counts and names ----
-  counts <- Seurat::GetAssayData(obj, assay = "RNA", slot = "counts")
+  counts <- methods::as(SeuratObject::LayerData(obj), "dgCMatrix")
   if (is.null(counts) || nrow(counts) == 0)
     stop("RNA@counts is missing or empty. scVI requires raw counts in X.")
-  
-  if (!inherits(counts, "dgCMatrix"))
-    counts <- as(counts, "dgCMatrix")
   
   cells <- colnames(obj)
   genes <- rownames(obj)
@@ -118,8 +122,16 @@ integrate_scvi <- function(preprocessed_obj_path, config_path = "config.yaml") {
   rownames(obs_df) <- colnames(obj)  # cells
   obs_py <- pd$DataFrame(obs_df, index = colnames(obj))
   
-  var_df <- data.frame(feature_name = genes_unique,
-                       stringsAsFactors = FALSE, check.names = FALSE, row.names = genes_unique)
+  genes_unique <- if (anyDuplicated(genes)) make.unique(genes) else genes
+  is_hvg <- genes_unique %in% hvg
+  
+  var_df <- data.frame(
+    feature_name     = genes_unique,
+    highly_variable  = is_hvg,                
+    stringsAsFactors = FALSE,
+    check.names      = FALSE,
+    row.names        = genes_unique
+  )
   var_py <- pd$DataFrame(var_df)
   
   ad_obj <- anndata$AnnData(X = X, obs = obs_py, var = var_py)
@@ -138,15 +150,8 @@ integrate_scvi <- function(preprocessed_obj_path, config_path = "config.yaml") {
 
   log_message("Executing Python script for scVI training...")
 
-  # Pass arguments to the python script: h5ad path and config path
-  # The python script will read its own parameters from the config file
-  scvi_py_script <- "py/scvi_integration.py"
-  if (!file.exists(scvi_py_script)) {
-    stop("Python script not found at: ", scvi_py_script)
-  }
-
   # Source the python script, which makes its functions available in R
-  source_python(scvi_py_script)
+  reticulate::source_python("py/scvi_integration.py")
 
   # Call the main function defined in the Python script
   # It will modify the .h5ad file in place

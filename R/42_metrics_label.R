@@ -68,32 +68,19 @@ calculate_label_metrics <- function(analyzed_obj_path, method_name, config_path 
     results$ari <- mclust::adjustedRandIndex(cluster_labels, true_labels)
   }
 
-  # cLISI (cell-type LISI)
+  # cLISI (cell-type LISI) Inverse score so higher = better 
   if ("clisi" %in% metrics_to_run) {
     log_message("Calculating cLISI...")
     clisi_scores <- lisi::compute_lisi(emb, meta, labels_key)
-    # Inverse score so higher = better (less mixing of labels)
-    # Add a small epsilon to avoid division by zero if mean is 1
     mean_clisi <- mean(clisi_scores[, 1], na.rm = TRUE)
-    results$clisi <- 1 / (mean_clisi + 1e-9)
+    results$clisi <- 1 / (mean_clisi + 1e-9) # add small epsilon here
   }
 
   # kBET (per label)
   if ("kbet_label" %in% metrics_to_run) {
     log_message("Calculating kBET (label)...")
-    # Subsample for speed
-    n_cells <- nrow(emb)
-    if (n_cells > 5000) {
-      sample_indices <- sample(1:n_cells, 5000)
-      emb_sample <- emb[sample_indices, ]
-      labels_sample <- as.factor(true_labels[sample_indices])
-    } else {
-      emb_sample <- emb
-      labels_sample <- as.factor(true_labels)
-    }
-
-    # High acceptance rate means neighborhoods are pure by label, which is good.
-    results$kbet_label <- calculate_kbet(emb_sample, labels_sample)
+    # High acceptance rate means neighborhoods are pure by label
+    results$kbet_label <- calculate_kbet(emb, true_labels)
   }
 
   stop_timer(metrics_timer, paste0("Label metrics calculation for ", method_name))
