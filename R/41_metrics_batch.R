@@ -86,19 +86,8 @@ calculate_batch_metrics <- function(analyzed_obj_path, method_name, config_path 
   # ASW (Silhouette)
   if ("asw_batch" %in% metrics_to_run) {
     log_message("Calculating ASW (batch)...")
-    # Subsample for speed if dataset is large
-    n_cells <- nrow(emb)
-    if (n_cells > 5000) {
-      sample_indices <- sample(1:n_cells, 5000)
-      emb_sample <- emb[sample_indices, ]
-      batch_labels_sample <- batch_labels[sample_indices]
-    } else {
-      emb_sample <- emb
-      batch_labels_sample <- batch_labels
-    }
-
-    dist_matrix <- dist(emb_sample)
-    sil <- silhouette(as.integer(as.factor(batch_labels_sample)), dist_matrix)
+    dist_matrix <- dist(emb)
+    sil <- silhouette(as.integer(as.factor(batch_labels)), dist_matrix)
     asw_score <- mean(sil[, "sil_width"])
     results$asw_batch <- 1 - asw_score # Higher is better mixing
   }
@@ -113,17 +102,7 @@ calculate_batch_metrics <- function(analyzed_obj_path, method_name, config_path 
   # kBET
   if ("kbet_batch" %in% metrics_to_run) {
     log_message("Calculating kBET (batch)...")
-    # kBET can be slow, subsample to 5k cells if larger
-    n_cells <- nrow(emb)
-    if (n_cells > 5000) {
-      sample_indices <- sample(1:n_cells, 5000)
-      emb_sample <- emb[sample_indices, ]
-      batch_labels_sample <- as.factor(batch_labels[sample_indices])
-    } else {
-      emb_sample <- emb
-      batch_labels_sample <- as.factor(batch_labels)
-    }
-    results$kbet_batch <- calculate_kbet(emb_sample, batch_labels_sample)
+    results$kbet_batch <- calculate_kbet(emb, batch_labels)
   }
 
   stop_timer(metrics_timer, paste0("Batch metrics calculation for ", method_name))
