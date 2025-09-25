@@ -44,15 +44,7 @@ rank_methods <- function(config_path = "config.yaml") {
       names_to = "metric",
       values_to = "raw_value"
     )
-
-  # Min-max normalization function
-  min_max_norm <- function(x) {
-    # If all values are the same, return 1 to avoid division by zero
-    if (max(x, na.rm = TRUE) == min(x, na.rm = TRUE)) {
-      return(rep(1, length(x)))
-    }
-    (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
-  }
+  metrics_long <- na.omit(metrics_long)
 
   # Apply normalization per metric
   metrics_norm <- metrics_long %>%

@@ -11,8 +11,11 @@ suppressPackageStartupMessages({
   library(tidyr)
   library(patchwork)
   library(gt)
+  library(viridis)
+  library(RColorBrewer)
   library(fmsb) # For radar charts
   library(RColorBrewer)
+  library(scplotter)
 })
 
 # --- Source utilities ---
@@ -43,7 +46,7 @@ generate_plots <- function(config_path = "config.yaml") {
     pivot_longer(-method, names_to = "metric", values_to = "score")
 
   p_bar <- ggplot(raw_metrics_long, aes(x = reorder(method, -score), y = score, fill = method)) +
-    geom_col(show.legend = FALSE) +
+    geom_col(show.legend = FALSE, color = "black", lwd = 0.5) +
     facet_wrap(~metric, scales = "free_y") +
     labs(
       title = "Raw Metric Scores by Integration Method",
@@ -51,9 +54,10 @@ generate_plots <- function(config_path = "config.yaml") {
       y = "Raw Score (directionally adjusted)"
     ) +
     UtilityTheme() +
+    scale_fill_viridis(discrete = TRUE) + 
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-  ggsave(file.path(paths$figures_dir, "01_barplot_raw_metrics.png"), p_bar, width = 10, height = 8, bg = "white")
+  ggsave(file.path(paths$figures_dir, "01_barplot_raw_metrics.pdf"), p_bar, width = 10, height = 8, bg = "white")
 
   # --- 3. Heatmap of Normalized Metrics ---
   log_message("Generating heatmap of normalized metrics...")
@@ -75,7 +79,7 @@ generate_plots <- function(config_path = "config.yaml") {
     UtilityTheme() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-  ggsave(file.path(paths$figures_dir, "02_heatmap_normalized_metrics.png"), p_heatmap, width = 10, height = 6, bg = "white")
+  ggsave(file.path(paths$figures_dir, "02_heatmap_normalized_metrics.pdf"), p_heatmap, width = 10, height = 6, bg = "white")
 
   # --- 4. Radar Charts ---
   log_message("Generating radar charts...")
@@ -92,7 +96,7 @@ generate_plots <- function(config_path = "config.yaml") {
   for (i in 1:length(config$methods$run)) {
     method_name <- config$methods$run[i]
 
-    png(file.path(paths$figures_dir, paste0("03_radarchart_", method_name, ".png")), width = 800, height = 800, res = 150, bg = "white")
+    png(file.path(paths$figures_dir, paste0("03_radarchart_", method_name, ".pdf")), width = 800, height = 800, res = 150, bg = "white")
     radarchart(
       df = radar_data[c(1, 2, i + 2), ],
       title = paste("Performance Profile:", method_name),
@@ -121,13 +125,25 @@ generate_plots <- function(config_path = "config.yaml") {
     labels_key <- config$methods$scanvi$labels_key
 
     p_umap_batch <- DimPlot(obj, reduction = umap_reduction_name, group.by = batch_var, pt.size = 0.1) +
-      labs(title = paste(method_name, "- Batch")) + UtilityTheme()
-    p_umap_label <- DimPlot(obj, reduction = umap_reduction_name, group.by = labels_key, pt.size = 0.1, label = TRUE, repel = TRUE) +
-      labs(title = paste(method_name, "- Cell Type")) + UtilityTheme() + NoLegend()
+      labs(title = paste(method_name, "- Batch")) + 
+      scale_color_viridis(option = "H", discrete = TRUE) +  
+      UtilityTheme() + 
+      guides(color = "none")
+    p_umap_label <- DimPlot(obj, reduction = umap_reduction_name, group.by = labels_key, pt.size = 0.1, repel = TRUE) +
+      labs(title = paste(method_name, "- Cell Type")) + 
+      UtilityTheme()  + 
+      scale_color_manual(values = colorRampPalette(brewer.pal(12, "Paired"))(length(unique(unlist(obj[[labels_key]])))))
+    
 
     p_combined_umap <- p_umap_batch + p_umap_label
-
     ggsave(file.path(paths$figures_dir, paste0("04_umap_", method_name, ".png")), p_combined_umap, width = 14, height = 6, bg = "white")
+    
+    FeatureStatPlot(obj, 
+                    palcolor = viridis_pal()(50),
+                    features = c("CD8A", "CD4", "FOXP3", "CCR7"), 
+                    plot_type = "dim", 
+                    bg_cutoff = -Inf)
+    ggsave(file.path(paths$figures_dir, paste0("04_umap_", method_name, "_selectedFeatures.png")), width = 6.25, height = 6, bg = "white")
   }
 
   # --- 6. Summary League Table Plot ---
@@ -151,7 +167,7 @@ generate_plots <- function(config_path = "config.yaml") {
     fmt_number(columns = c(GlobalScore, Score_Batch, Score_Label), decimals = 3) %>%
     data_color(
       columns = c(GlobalScore, Score_Batch, Score_Label),
-      colors = scales::col_numeric(
+      fn= scales::col_numeric(
         palette = c("white", "cornflowerblue"),
         domain = c(0, 1)
       )
