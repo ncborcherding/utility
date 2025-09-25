@@ -1,0 +1,21 @@
+name: sc-integration-benchmark
+channels:
+  - conda-forge
+dependencies:
+  # Core Python
+  - python=3.10
+  - pip
+  - numpy>=1.25
+  - pandas>=2.0
+  - scipy>=1.10
+  - h5py
+  - matplotlib
+  - seaborn
+  - scikit-learn
+  - python-igraph
+  - leidenalg
+  - pytorch=2.3.*
+  - pip:
+      - scvi-tools==1.3.*
+      - scanpy==1.11.*
+      - anndata[zarr]   # installs zarr support as an extra
