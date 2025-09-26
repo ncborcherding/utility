@@ -1,11 +1,34 @@
 # R/00_clust_utils.R
-obj <- Seurat::FindClusters(
-  object = obj, graph.name = graph_name,
-  resolution = resolution, algorithm = algorithm, ...
-)
-obj
+# Helper utilities for parameter grids, Leiden checks, and metrics
+
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(dplyr)
+  library(tidyr)
+  library(purrr)
+  library(future.apply)
+  library(igraph)
+})
+
+# --- Logging ---
+log_message <- function(...) {
+  cat(sprintf("[%s] %s\n", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), paste(...)))
 }
 
+# --- Build parameter grid ---
+build_param_grid <- function(resolutions, k_params, weights = NULL) {
+  expand.grid(
+    resolution = resolutions,
+    k_param    = k_params,
+    weights    = if (is.null(weights)) NA_character_ else weights,
+    KEEP.OUT.ATTRS = FALSE,
+    stringsAsFactors = FALSE
+  ) %>%
+    tibble::as_tibble() %>%
+    mutate(cfg_id = sprintf("res%.2f_k%d%s",
+                            resolution, k_param,
+                            ifelse(is.na(weights), "", paste0("_w", weights))))
+}
 
 # --- Silhouette on an embedding ---
 # Uses PCA by default. Provide a matrix 'emb' (cells x dims) and
@@ -18,23 +41,17 @@ compute_silhouette <- function(emb, cl) {
   mean(sil[, "sil_width"])
 }
 
-
 # --- Graph modularity for the cluster partition ---
-compute_modularity <- function(obj, cluster_col, graph_name = "SNN") {
-  g <- obj@graphs[[graph_name]]
+compute_modularity <- function(g, obj, cluster_col) {
   if (is.null(g)) return(NA_real_)
-  if (!igraph::is.igraph(g)) g <- SeuratObject::as.graph(g)
   cl <- factor(obj[[cluster_col, drop = TRUE]])
   igraph::modularity(g, membership = as.integer(cl))
 }
 
-
 # --- Graph connectivity: average fraction of nodes in LCC within clusters ---
 # (Higher is more connected; 1.0 means each cluster is a single connected piece.)
-compute_graph_connectivity <- function(obj, cluster_col, graph_name = "SNN") {
-  g <- obj@graphs[[graph_name]]
+compute_graph_connectivity <- function(g, obj, cluster_col) {
   if (is.null(g)) return(NA_real_)
-  if (!igraph::is.igraph(g)) g <- SeuratObject::as.graph(g)
   cl <- factor(obj[[cluster_col, drop = TRUE]])
   fracs <- vapply(levels(cl), function(cc) {
     nodes <- which(cl == cc)
@@ -45,7 +62,6 @@ compute_graph_connectivity <- function(obj, cluster_col, graph_name = "SNN") {
   }, numeric(1))
   mean(fracs)
 }
-
 
 # --- Jaccard stability between two labelings ---
 # Computes average Jaccard index between matched clusters using Hungarian algorithm
