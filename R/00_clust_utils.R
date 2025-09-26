@@ -42,24 +42,31 @@ compute_silhouette <- function(emb, cl) {
 }
 
 # --- Graph modularity for the cluster partition ---
-compute_modularity <- function(g, obj, cluster_col) {
-  if (is.null(g)) return(NA_real_)
-  cl <- factor(obj[[cluster_col, drop = TRUE]])
-  igraph::modularity(g, membership = as.integer(cl))
+compute_modularity <- function(g, membership) {
+  if (is.null(g) || is.null(membership)) return(NA_real_)
+  if (igraph::vcount(g) != length(membership)) return(NA_real_)
+  cl_int <- as.integer(factor(membership))  # robust to non-contiguous labels
+  igraph::modularity(g, membership = cl_int)
 }
 
 # --- Graph connectivity: average fraction of nodes in LCC within clusters ---
 # (Higher is more connected; 1.0 means each cluster is a single connected piece.)
-compute_graph_connectivity <- function(g, obj, cluster_col) {
-  if (is.null(g)) return(NA_real_)
-  cl <- factor(obj[[cluster_col, drop = TRUE]])
-  fracs <- vapply(levels(cl), function(cc) {
-    nodes <- which(cl == cc)
-    if (length(nodes) <= 1) return(1)
+compute_graph_connectivity <- function(g, membership) {
+  if (is.null(g) || is.null(membership)) return(NA_real_)
+  if (igraph::vcount(g) != length(membership)) return(NA_real_)
+  
+  cl <- factor(membership)
+  # Split node indices by cluster (fast; avoids repeated which())
+  idx_list <- split(seq_along(cl), cl)
+  
+  fracs <- vapply(idx_list, function(nodes) {
+    n <- length(nodes)
+    if (n <= 1) return(1)  # singleton cluster treated as fully connected
     sg <- igraph::induced_subgraph(g, vids = nodes)
     comps <- igraph::components(sg)$csize
-    max(comps) / sum(comps)
+    max(comps) / n
   }, numeric(1))
+  
   mean(fracs)
 }
 
