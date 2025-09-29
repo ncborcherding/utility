@@ -150,7 +150,14 @@ run_pipeline <- function(config_path) {
   #  graph_name = config$clustering$graph_name
   #)
   
+  #TODO Cell Annotation issue #12
+  # - Canonical Marker Plots for T Cells
+  # - Cell Type Annotation Plots
+  # - Cluster Assignments
+  
   #TODO Export to scanpy/scirpy issue #15 on github
+  
+  #TODO Run Cohort Summarization
   
  
 
