@@ -107,9 +107,6 @@ run_pipeline <- function(config_path) {
   )
   
   # Step 7: Grid search for leiden clustering
-  #TODO: Error in .run_one_cfg(grid[i, ], seurat_rds_path, best_method, dims) : 
-  #No embeddings found for reduction 'scanvi'
-  
   run_cluster_param_grid(
     best_method = best_method,
     seurat_rds_path = best_integrated_obj_path,
@@ -139,7 +136,7 @@ run_pipeline <- function(config_path) {
     singleton_penalty = config$clustering$scoring_weights$singleton_penalty
   )
   
-  
+  apply_best_clusters
   
   
   
@@ -160,7 +157,8 @@ run_pipeline <- function(config_path) {
   #TODO Run Cohort Summarization
   
  
-
+  writeLines(capture.output(sessionInfo()), "/summary/sessionInfo.txt")
+  
   log_message("=== Pipeline Finished Successfully ===")
 }
 
