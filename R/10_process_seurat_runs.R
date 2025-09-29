@@ -16,8 +16,7 @@ source("R/00_utils.R")
 
 qc_add_mito_ribo <- function(obj,
                              mito_pattern = "^MT-",
-                             ribo_pattern = "^RP[SL][-]?" # RPS/RPL, allow optional dash
-) {
+                             ribo_pattern = "^RPS|RPL-") {
   obj[["percent.mito"]] <- PercentageFeatureSet(obj, pattern = mito_pattern)
   obj[["percent.ribo"]] <- PercentageFeatureSet(obj, pattern = ribo_pattern)
   obj
@@ -87,7 +86,18 @@ process_seurat_runs <- function(config_path = "config.yaml") {
   for (src in tenx_runs) {
     m <- Read10X(src)
     if (inherits(m, "list")) m <- m[[1]]
-    obj <- Createobject(counts = m, assay = "RNA", project = basename(src))
+    
+    #Ensure using updated features
+    updated.features <- UpdateGenes(rownames(m), gene.symbols = gene.symbols)
+    # Sum counts for genes with the same (updated) symbol
+    summed_matrix <-sparseRowsum(X = tmp, 
+                                 group = updated.features[[1]], 
+                                 drop.unused.levels = TRUE) 
+    
+    # Create a Seurat assay object from the summed count matrix
+    tmp_assay <- CreateAssayObject(counts = summed_matrix)
+    
+    obj <- Createobject(counts = tmp_assay, assay = "RNA", project = basename(src))
     obj <- RenameCells(object = obj, 
                        new.names = paste0(basename(src), "_", rownames(obj[[]])))
     

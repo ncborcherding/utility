@@ -130,15 +130,22 @@ run_pipeline <- function(config_path) {
   )
   
   # Step 9: Scoring leiden clusters
-  combine_and_score(
-    w_sil = config$clustering$scoring_weights$w_sil,
-    w_mod = config$clustering$scoring_weights$w_mod,
-    w_conn = config$clustering$scoring_weights$w_conn,
-    w_stab = config$clustering$scoring_weights$w_stab,
-    singleton_penalty = config$clustering$scoring_weights$singleton_penalty
-  )
+  cluster.parameters <- combine_and_score(
+        w_sil = config$clustering$scoring_weights$w_sil,
+        w_mod = config$clustering$scoring_weights$w_mod,
+        w_conn = config$clustering$scoring_weights$w_conn,
+        w_stab = config$clustering$scoring_weights$w_stab,
+        singleton_penalty = config$clustering$scoring_weights$singleton_penalty)
   
-  make_final_object()
+  # Integrating and clustering final object
+  make_final_object(cfg = config,
+                    best_method, 
+                    k = cluster.parameters$k, 
+                    resolution = cluster.parameters$resolution)
+  
+  
+  #preprocessed_obj_path <- "results/03_preprocessed_data/preprocessed_bpcells_object.rds"
+  
   
   #TODO Final Integration and clustering of full object issue #11 and 13 on github
   #apply_best_clusters(
