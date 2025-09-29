@@ -6,33 +6,29 @@
 
 ### Introduction
 The original intent of assembling a data set of publicly-available tumor-infiltrating T cells (TILs) with paired TCR sequencing was to expand 
-and improve the [scRepertoire](https://github.com/ncborcherding/scRepertoire) R package. However, after some discussion, we decided to release 
+and improve the [scRepertoire](https://github.com/BorchLab/scRepertoire) R package. However, after some discussion, we decided to release 
 the data set for everyone, a complete summary of the sequencing runs and the sample information can be found in the meta data of the Seurat object. 
 
 This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 3) iterating through automatic annotation, 
-and 4) adding the TCR information. This information is stored in the meta data of the Seurat objects - 
-an explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summaryInfo/meta.data.headers.txt).
+and 4) adding the TCR information. This information is stored in the meta data of the Seurat objects - an explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summary/metadata_headers.txt).
 
 
 ### Folder Structure
 ```
-├── code
-│   ├── Processing_Utility.Rmd - general processing script
-│   └── Summarize_Data.Rmd - script to get summary data
+├── config.yaml         - parameters control for processing and integrating
 ├── data
-│   ├── SequencingRuns - 10x Outputs
-│   └── processedData - Processed .rds and larger combined cohorts
-├── NEWS.txt - changes made
-├── outputs
-│   └── qc - plots for quality control purposes
+│   ├── sequencingRuns  - 10x Outputs
+│   └── processedData   - processed .rds and larger combined cohorts
+├── environment.yml     - python environment
+├── figs                - image ouputs for processing and integration
+├── LICENSE.txt
+├── NEWS.txt            - update information
+├── py                  - python scripts
+├── R                   - R scripts
 ├── README.md
-└── summaryInfo
-    ├── TcellSummaryTable.csv
-    ├── cohortSummaryTable.csv
-    ├── meta.data.headers.txt - what the meta data headers mean
-    ├── sample.directory.xlsx - all the available data for the cohort
-    ├── sessionInfo.txt - what I am running in terms of the pipeline
-    └── tumorSummaryTable.csv
+├── results             - intermediate and final ouputs
+├── run_pipeline.R      - main pipeline to run
+└── summary             - tables summarizing the data
 
 ```
 
@@ -78,14 +74,16 @@ Here is the current list of data sources, the number of cells that passed filter
 | PRJNA705464      | 98892 | 15113   | 30340  | 0     | 3505  | 0     | Renal         | [cite](https://pubmed.ncbi.nlm.nih.gov/33861994/) |
 
 *****
+
 ### Methods
 
 #### Single-Cell Data Processing
+
 The filtered gene matrices output from Cell Ranger align function  from individual sequencing runs (10x Genomics, Pleasanton, CA) loaded into the R global environment. For each sequencing run cell barcodes were appended to contain a unique prefix to prevent issues with duplicate barcodes. The results were then ported into individual Seurat objects ([citation](https://pubmed.ncbi.nlm.nih.gov/34062119/)), where the cells with > 10% mitochondrial genes and/or 2.5x standard deviation from the mean of features were excluded for quality control purposes. At the individual sequencing run level, doublets were estimated using the scDblFinder (v1.4.0) R package. 
 
 #### Annotation of Cells
 
-Automatic annotation was performed using the singler (v2.2.0) R package ([citation](https://pubmed.ncbi.nlm.nih.gov/30643263/)) with the HPCA ([citation](https://pubmed.ncbi.nlm.nih.gov/24053356/)) and DICE ([citation](https://pubmed.ncbi.nlm.nih.gov/30449622/)) data sets as references and the fine label discriminators. Individual sequencing runs were subsetted to run through the singleR algorithm in order to reduce memory demands. The output of all the singleR analyses were collated and appended to the meta data of the seurat object. Likewise, the Azimuth (v0.4.6.9004) R Package ([citation](https://pubmed.ncbi.nlm.nih.gov/34062119/) was used for automatic annotation as a partially orthogonal approach. 
+Automatic annotation was performed using the singler (v2.2.0) R package ([citation](https://pubmed.ncbi.nlm.nih.gov/30643263/)) with the HPCA ([citation](https://pubmed.ncbi.nlm.nih.gov/24053356/)) and DICE ([citation](https://pubmed.ncbi.nlm.nih.gov/30449622/)) data sets as references and the fine label discriminators. Individual sequencing runs were subsetted to run through the singleR algorithm in order to reduce memory demands. The output of all the singleR analyses were collated and appended to the meta data of the Seurat object. Likewise, the Azimuth (v0.4.6.9004) R Package ([citation](https://pubmed.ncbi.nlm.nih.gov/34062119/) was used for automatic annotation as a partially orthogonal approach. 
 
 #### Addition of TCR data
 
@@ -93,10 +91,10 @@ The filtered contig annotation T cell receptor (TCR) data for available sequenci
 
 #### Session Info
 
-
-Session Info for the initial data processing and analysis can be found [here](https://github.com/ncborcherding/utility/blob/main/summaryInfo/sessionInfo.txt).
+Session Info for the initial data processing and analysis can be found [here](https://github.com/ncborcherding/utility/blob/main/summary/sessionInfo.txt).
 
 *****
+
 ### Citations
 
 As of right now, there is no citation associated with the assembled data set. However if using the data, please find the corresponding manuscript for 
@@ -114,6 +112,7 @@ each data set summarized above or can be found in the [summary table](https://gi
 * PBMC reference - [citation](https://pubmed.ncbi.nlm.nih.gov/31178118/)
 
 *****
+
 ### Future Directions
 
 * Unified Dimensional Reduction of T cells with Cluster Annotations
@@ -124,12 +123,14 @@ each data set summarized above or can be found in the [summary table](https://gi
 There are areas in which we are actively hoping to develop to further facilitate the usefulness of the data set - if you have other suggestions, please reach out using the contact information below.
 
 *****
+
 ### License
 
-The data and analysis of uTILity is provided under a CC BY-ND 4.0 license, please feel free to remix, transform, and build upon the material. However, the intent of this resource is noncommercial, if using the data as a nonacademic institution, you are in violation of the lisence agreement. Please find out more information [here](https://github.com/ncborcherding/utility/blob/main/LICENSE.txt).
-
+The data and analysis of uTILity is provided under a CC BY-ND 4.0 license, please feel free to remix, transform, and build upon the material. However, the intent of this resource is noncommercial.
 
 *****
+
 ### Contact
-Questions, comments, suggestions, please feel free to contact Nick Borcherding via this repository, [email](mailto:ncborch@gmail.com), or using [twitter](https://twitter.com/theHumanBorch). 
+
+Questions, comments, suggestions, please feel free to contact Nick Borcherding via this repository.
 
