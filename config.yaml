@@ -3,12 +3,22 @@
 # 1. Paths and File Settings
 paths:
   seurat_objects: "./data/processedData/seuratObjects/" # Path to individual Seurat objects
+  sequencing_runs: "./data/sequencingRuns/"
   results_dir: "./results/"
   figures_dir: "./figs/"
   tmp_dir: "./tmp/" # For intermediate files like .h5ad
   log_file: "./results/pipeline.log"
 
-# 2. Filtering (applied per-object before BPCells conversion)
+# 2. QC for original processing
+qc:
+  min_features: 100
+  min_counts: 0
+  max_mito_pct: 10
+  max_ribo_pct: 60
+  high_feature_sd_enable: true
+  high_feature_sd: 2.5
+
+# 3. Filtering (applied per-object before BPCells conversion)
 filtering:
   run: true
   filters:
@@ -20,7 +30,7 @@ filtering:
     # Add more filters as needed, e.g., to filter by 'CTaa' if required.
     # - { column: "CTaa", type: "not_na", values: null }
 
-# 3. Subsetting and Sketching (applied per-object after filtering)
+# 4. Subsetting and Sketching (applied per-object after filtering)
 subset:
   run: true
   n_cells_total: 50000 # Total number of cells to subset/sketch to
@@ -31,11 +41,11 @@ subset:
     strata_cols: ["tissue", "orig.ident", "predicted.celltype.l1"]
     min_cells_per_stratum: 10
 
-# 3. Preprocessing
+# 5. Preprocessing
 preprocess:
   n_variable_features: 3000
 
-# 4. Integration Methods: settings for each
+# 6. Integration Methods: settings for each
 methods:
   run: ["harmony", "fastmnn", "scvi", "scanvi"] # Which methods to run 
 
@@ -89,32 +99,32 @@ methods:
     early_stopping: true
     check_val_every_n_epoch: 5  
 
-# 5. Post-integration Clustering and UMAP
+# 7. Post-integration Clustering and UMAP
 post_integration:
   n_neighbors: 30
   leiden_resolution: 1.0
   n_dims_use: 30 # Number of dimensions from each method to use for UMAP/clustering
 
-# 6. Metrics
+# 8. Metrics
 metrics:
   batch: ["asw_batch", "ilisi", "kbet_batch"]
   label: ["nmi", "ari", "clisi", "kbet_label"]
 
-# 7. Ranking
+# 9. Ranking
 ranking:
   w_batch: 0.6 # Weight for the batch correction score
   w_label: 0.4 # Weight for the label conservation score
 
-# 8. Plotting
+# 10. Plotting
 plotting:
   umap_dot_size: 0.1
   umap_group_by: ["batch", "predicted.celltype.l1"]
   palette: "viridis" # Color palette for plots
 
-# 9. Reproducibility
+# 11. Reproducibility
 seed: 42
 
-# 10 Memory Handling
+# 12 Memory Handling
 memory:
   num_workers: 0        
   pin_memory: false
@@ -126,7 +136,7 @@ memory:
   drop_varm: true
   drop_layers_except: true
 
-# 11. Clustering
+# 13. Clustering
 clustering:
   dims: [1, 30] # inclusive PCA dims used
   graph_name: "KNN"

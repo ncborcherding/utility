@@ -56,6 +56,8 @@ run_pipeline <- function(config_path) {
   dir.create(config$paths$tmp_dir, showWarnings = FALSE, recursive = TRUE)
 
   # --- Pipeline Steps ---
+  #10_process_seurat_runs is the script run to process individual sequencing
+  #runs, skipped for the purposes of the integration pipeline
 
   # Step 1: Process raw Seurat objects to on-disk BPCells format
   # This includes filtering and subsetting per-sample.
