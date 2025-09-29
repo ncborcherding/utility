@@ -70,19 +70,22 @@ compute_graph_connectivity <- function(g, membership) {
   mean(fracs)
 }
 
+
+
 # --- Jaccard stability between two labelings ---
-# Computes average Jaccard index between matched clusters using Hungarian algorithm
 jaccard_stability <- function(cl1, cl2) {
+  stopifnot(length(cl1) == length(cl2))
   cl1 <- factor(cl1); cl2 <- factor(cl2)
-  # contingency table
   tab <- table(cl1, cl2)
-  # convert to Jaccard matrix
   jacc <- outer(levels(cl1), levels(cl2), Vectorize(function(a, b) {
     inter <- sum(cl1 == a & cl2 == b)
     u <- sum(cl1 == a) + sum(cl2 == b) - inter
     if (u == 0) return(1)
     inter / u
   }))
+  if(dim(jacc)[1] > dim(jacc)[2]) {
+    jacc <- t(jacc)
+  }
   # maximize sum via Hungarian (solve assignment on cost = 1 - jacc)
   assignment <- clue::solve_LSAP(1 - jacc)
   mean(jacc[cbind(seq_along(assignment), assignment)])
