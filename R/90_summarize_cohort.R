@@ -1,12 +1,16 @@
-# R/update_readme.R
+# R/90_summarize_cohort.R
 
 # This script generates a summary of the cohort and updates the README.md file.
+suppressPackageStartupMessages({
+  library(Seurat)
+})
 
-library(Seurat)
+#TODO Ensure readme is updated properly
+#TODO export tables to /summary as well
 
 # 1. Load the final integrated Seurat object
 # This assumes the script is run from the root of the project directory
-seurat_object_path <- "./data/integratedSeuratObject.rds"
+seurat_object_path <- "./results/integratedSeuratObject.rds"
 if (!file.exists(seurat_object_path)) {
   stop("Final Seurat object not found. Please run the integration pipeline first.")
 }

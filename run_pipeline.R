@@ -154,8 +154,8 @@ run_pipeline <- function(config_path) {
   
   #TODO Export to scanpy/scirpy issue #15 on github
   
-  #TODO Run Cohort Summarization
-  
+  #Step 14: Automatically update README and summary tables
+  summarise_cohort()
  
   writeLines(capture.output(sessionInfo()), "/summary/sessionInfo.txt")
   
