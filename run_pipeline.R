@@ -136,9 +136,7 @@ run_pipeline <- function(config_path) {
     singleton_penalty = config$clustering$scoring_weights$singleton_penalty
   )
   
-  apply_best_clusters
-  
-  
+  make_final_object()
   
   #TODO Final Integration and clustering of full object issue #11 and 13 on github
   #apply_best_clusters(
