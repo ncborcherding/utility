@@ -144,15 +144,23 @@ run_pipeline <- function(config_path) {
                     resolution = cluster.parameters$resolution)
   
   
-  #preprocessed_obj_path <- "results/03_preprocessed_data/preprocessed_bpcells_object.rds"
+  log_message("Best Parameters Found - K: ", cluster.parameters$k, " | Res: ", cluster.parameters$resolution)
   
+  # Step 10: Creating Final Object on FULL Data
+  # This calls the function defined in 40_generate_final_object.R
+  make_final_object(
+    cfg = config,
+    best_method = best_method, 
+    k = cluster.parameters$k, 
+    resolution = cluster.parameters$resolution
+  )
   
-  #TODO Final Integration and clustering of full object issue #11 and 13 on github
-  #apply_best_clusters(
-  #  seurat_rds_in = ,
-  #  dims = seq(config$clustering$dims[[1]], config$clustering$dims[[2]]),
-  #  graph_name = config$clustering$graph_name
-  #)
+  #Step 11: Automatically update README and summary tables
+  # summarise_cohort() # Ensure this function exists in your utils
+  
+  writeLines(capture.output(sessionInfo()), paste0(config$paths$results_dir, "/sessionInfo.txt"))
+  
+  log_message("=== Pipeline Finished Successfully ===")
   
   #TODO Cell Annotation issue #12
   # - Canonical Marker Plots for T Cells
