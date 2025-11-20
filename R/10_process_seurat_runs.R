@@ -1,7 +1,6 @@
 # R/10_process_seurat_runs.R
 suppressPackageStartupMessages({
   library(Seurat)
-  library(object)
   library(dplyr)
   library(ggplot2)
   library(yaml)
