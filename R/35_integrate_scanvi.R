@@ -23,6 +23,8 @@ integrate_scanvi <- function(preprocessed_obj_path, config_path = "config.yaml")
   batch_var  <- config$methods$harmony$group_by_vars[[1]] %||% NULL
   unlabeled  <- config$methods$scanvi$unlabeled_category %||% "Unknown"
   
+  integration_timer <- start_timer() 
+  
   log_message("Loading preprocessed Seurat object from: ", preprocessed_obj_path)
   obj <- readRDS(preprocessed_obj_path)
   DefaultAssay(obj) <- "RNA"
@@ -136,12 +138,15 @@ integrate_scanvi <- function(preprocessed_obj_path, config_path = "config.yaml")
     assay = DefaultAssay(obj)
   )
   
+  stop_timer(integration_timer, "scANVI Integration (save)")
+  
+  # Join Layers
+  obj <- JoinLayers(obj)
+  
   # --- Save ---
-  integration_timer <- start_timer()  # just to time the saving neatly
   output_dir <- file.path(config$paths$results_dir, "04_integrated_data")
   output_path <- file.path(output_dir, "scanvi.rds")
   safe_save_rds(obj, output_path)
-  stop_timer(integration_timer, "scANVI Integration (save)")
   
   log_message("Seurat object with scANVI integration saved: ", output_path)
   return(output_path)

@@ -72,6 +72,9 @@ integrate_harmony <- function(preprocessed_obj_path, config_path = "config.yaml"
   obj[["harmony"]] <- harmony_reduction
 
   stop_timer(integration_timer, "Harmony Integration")
+  
+  # Join Layers
+  obj <- JoinLayers(obj)
 
   # --- 4. Save Integrated Object ---
   output_dir <- file.path(config$paths$results_dir, "04_integrated_data")

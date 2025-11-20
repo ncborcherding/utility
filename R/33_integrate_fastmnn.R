@@ -67,6 +67,9 @@ integrate_fastmnn <- function(preprocessed_obj_path,
   
   stop_timer(integration_timer, "fastMNN Integration")
   
+  # Join Layers
+  obj <- JoinLayers(obj)
+  
   output_dir <- file.path(config$paths$results_dir, "04_integrated_data")
   output_path <- file.path(output_dir, "fastmnn.rds")
   safe_save_rds(obj, output_path)
