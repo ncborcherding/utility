@@ -64,6 +64,7 @@ run_pipeline <- function(config_path) {
   bpcells_dir <- process_to_bpcells(config_path)
 
   # Step 2: Load BPCells data, find HVGs, merge, and preprocess (Scale/PCA)
+  #bpcells_dir <- file.path(config$paths$results_dir, "01_bpcells_data")
   preprocessed_obj_path <- preprocess_bpcells_data(bpcells_dir, config_path)
 
   # Step 3: Run integration, analysis, and metrics for each method

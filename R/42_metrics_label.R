@@ -26,7 +26,7 @@ calculate_label_metrics <- function(analyzed_obj_path, method_name, config_path 
   config <- yaml::read_yaml(config_path)
 
   metrics_to_run <- config$metrics$label
-  labels_key <- config$methods$scanvi$labels_key
+  labels_key <- config$post_integration$labels
   n_dims <- config$post_integration$n_dims_use
 
   obj <- readRDS(analyzed_obj_path)

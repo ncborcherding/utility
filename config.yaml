@@ -86,7 +86,7 @@ methods:
     hvg_n: null                          # null = do NOT recompute or cap; use your list as-is
     hvg_flavor: "seurat_v5"  
     unlabeled_category: "Unknown" # Value for cells with no label
-    labels_key: "predicted.celltype.l1"
+    labels_key: "Monaco.labels"
     n_latent: 30
     n_layers: 2
     n_hidden: 128
@@ -104,6 +104,7 @@ post_integration:
   n_neighbors: 30
   leiden_resolution: 1.0
   n_dims_use: 30 # Number of dimensions from each method to use for UMAP/clustering
+  labels: "predicted.celltype.l2"
 
 # 8. Metrics
 metrics:

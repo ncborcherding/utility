@@ -140,9 +140,6 @@ integrate_scanvi <- function(preprocessed_obj_path, config_path = "config.yaml")
   
   stop_timer(integration_timer, "scANVI Integration (save)")
   
-  # Join Layers
-  obj <- JoinLayers(obj)
-  
   # --- Save ---
   output_dir <- file.path(config$paths$results_dir, "04_integrated_data")
   output_path <- file.path(output_dir, "scanvi.rds")

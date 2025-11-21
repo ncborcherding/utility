@@ -182,9 +182,6 @@ integrate_scvi <- function(preprocessed_obj_path, config_path = "config.yaml") {
   obj[["scvi"]] <- scvi_reduction
 
   stop_timer(integration_timer, "scVI Integration")
-  
-  # Join Layers
-  obj <- JoinLayers(obj)
 
   # --- 5. Save Integrated Object ---
   output_dir <- file.path(config$paths$results_dir, "04_integrated_data")
