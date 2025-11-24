@@ -50,12 +50,12 @@ generate_full_bpcells <- function(config) {
           else if (f$type == "not_na") cells_to_keep <- cells_to_keep & !is.na(col_data)
         }
       }
+      if (sum(cells_to_keep) == 0) next
       obj <- subset(obj, cells = colnames(obj)[which(cells_to_keep)])
     }
     
     if (ncol(obj) == 0) next
     
-    # NO SUBSETTING - Write Full
     sample_bp_dir <- file.path(bp_dir_full, sample_name)
     
     counts_mat <- obj@assays$RNA@layers$counts
@@ -89,7 +89,7 @@ make_final_object <- function(cfg, best_method, k, resolution) {
   
   # Set up parallel plan for reading/processing
   n_workers <- cfg$memory$num_workers %||% 4
-  if(n_workers == 0) n_workers <- future::availableCores() - 1
+  if(n_workers == 0) n_workers <- future::availableCores() - 12
   plan("multisession", workers = n_workers)
   
   # Load objects into a list (lightweight pointers)

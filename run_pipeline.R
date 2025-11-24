@@ -137,14 +137,6 @@ run_pipeline <- function(config_path) {
         w_stab = config$clustering$scoring_weights$w_stab,
         singleton_penalty = config$clustering$scoring_weights$singleton_penalty)
   
-  # Integrating and clustering final object
-  make_final_object(cfg = config,
-                    best_method, 
-                    k = cluster.parameters$k, 
-                    resolution = cluster.parameters$resolution)
-  
-  
-  log_message("Best Parameters Found - K: ", cluster.parameters$k, " | Res: ", cluster.parameters$resolution)
   
   # Step 10: Creating Final Object on FULL Data
   # This calls the function defined in 40_generate_final_object.R
