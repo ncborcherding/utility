@@ -10,6 +10,8 @@ suppressPackageStartupMessages({
   library(yaml)
 })
 
+options(future.globals.maxSize = 16000 * 1024^2)
+
 # Source all R scripts in the R/ directory
 # This makes their functions available to the pipeline runner.
 r_scripts <- list.files("R", pattern = "\\.R$", full.names = TRUE)
@@ -94,7 +96,7 @@ run_pipeline <- function(config_path) {
   # Step 5: Rank methods based on all collected metrics
   log_message("=== Aggregating Metrics and Ranking Methods ===")
   best_method <- rank_methods(config_path)   
-  best_method <- read.csv(best_method)[["method"]][1]
+  best_method <- read.csv(best_method)[["method"]][2] # Not using SCANVI
   log_message("Best integration method selected:", best_method)
   
   # Step 6: Generate final summary plots
@@ -117,17 +119,14 @@ run_pipeline <- function(config_path) {
     graph_name = config$clustering$graph_name,
     resolutions = config$clustering$grid$resolutions,
     k_params = config$clustering$grid$k_params,
-    n_workers = config$parallel$nworkers
   )
   
   # Step 8: Assessing leiden cluster stability
   run_cluster_stability(
     seurat_rds_path = best_integrated_obj_path,
     dims = seq(config$clustering$dims[[1]], config$clustering$dims[[2]]),
-    graph_name = config$clustering$graph_name,
     subsample_frac = config$clustering$stability$subsample_frac,
     n_repeats = config$clustering$stability$n_repeats,
-    n_workers = config$parallel$nworkers
   )
   
   # Step 9: Scoring leiden clusters
