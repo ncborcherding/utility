@@ -8,7 +8,7 @@ suppressPackageStartupMessages({
 
 gene.symbols <- HGNChelper::hgnc.table
 
-checkAndUpdateGenes <- function(genes, gene.symbols) {
+updateGenes <- function(genes, gene.symbols) {
   # Initialize a vector to hold the updated gene symbols
   updated.genes <- vector("character", length = length(genes))
   

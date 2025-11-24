@@ -41,4 +41,7 @@ combine_and_score <- function(grid_metrics_path = "results/07_clustering/grid_me
   
   readr::write_csv(all, out_csv)
   saveRDS(all, sub("\\.csv$", ".rds", out_csv))
+  
+  return(list(k = all$k_param[1], 
+              resolution = all$resolution[1]))
 }

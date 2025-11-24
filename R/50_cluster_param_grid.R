@@ -8,6 +8,7 @@ suppressPackageStartupMessages({
   library(readr)
   library(bluster)
   library(leidenAlg)
+  library(SeuratObject)
   library(future.apply)
 })
 
@@ -32,8 +33,12 @@ run_cluster_param_grid <- function(best_method,
   log_message("Total grid size:", nrow(grid))
   
   # split work into N chunks (one per worker)
-  idx_chunks <- split(seq_len(nrow(grid)),
-                      rep_len(seq_len(n_workers), nrow(grid)))
+  n <- NROW(grid)  # works for data.frames, matrices, and vectors
+  idx_chunks <- split(
+    seq_len(n),
+    rep_len(seq_len(n_workers), n)
+  )
+  
   
   oplan <- future::plan()
   on.exit(future::plan(oplan), add = TRUE)

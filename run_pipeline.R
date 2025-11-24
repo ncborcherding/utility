@@ -10,6 +10,8 @@ suppressPackageStartupMessages({
   library(yaml)
 })
 
+options(future.globals.maxSize = 16000 * 1024^2)
+
 # Source all R scripts in the R/ directory
 # This makes their functions available to the pipeline runner.
 r_scripts <- list.files("R", pattern = "\\.R$", full.names = TRUE)
@@ -64,6 +66,7 @@ run_pipeline <- function(config_path) {
   bpcells_dir <- process_to_bpcells(config_path)
 
   # Step 2: Load BPCells data, find HVGs, merge, and preprocess (Scale/PCA)
+  #bpcells_dir <- file.path(config$paths$results_dir, "01_bpcells_data")
   preprocessed_obj_path <- preprocess_bpcells_data(bpcells_dir, config_path)
 
   # Step 3: Run integration, analysis, and metrics for each method
@@ -93,7 +96,7 @@ run_pipeline <- function(config_path) {
   # Step 5: Rank methods based on all collected metrics
   log_message("=== Aggregating Metrics and Ranking Methods ===")
   best_method <- rank_methods(config_path)   
-  best_method <- read.csv(best_method)[["method"]][1]
+  best_method <- read.csv(best_method)[["method"]][2] # Not using SCANVI
   log_message("Best integration method selected:", best_method)
   
   # Step 6: Generate final summary plots
@@ -116,36 +119,40 @@ run_pipeline <- function(config_path) {
     graph_name = config$clustering$graph_name,
     resolutions = config$clustering$grid$resolutions,
     k_params = config$clustering$grid$k_params,
-    n_workers = config$parallel$nworkers
   )
   
   # Step 8: Assessing leiden cluster stability
   run_cluster_stability(
     seurat_rds_path = best_integrated_obj_path,
     dims = seq(config$clustering$dims[[1]], config$clustering$dims[[2]]),
-    graph_name = config$clustering$graph_name,
     subsample_frac = config$clustering$stability$subsample_frac,
     n_repeats = config$clustering$stability$n_repeats,
-    n_workers = config$parallel$nworkers
   )
   
   # Step 9: Scoring leiden clusters
-  combine_and_score(
-    w_sil = config$clustering$scoring_weights$w_sil,
-    w_mod = config$clustering$scoring_weights$w_mod,
-    w_conn = config$clustering$scoring_weights$w_conn,
-    w_stab = config$clustering$scoring_weights$w_stab,
-    singleton_penalty = config$clustering$scoring_weights$singleton_penalty
+  cluster.parameters <- combine_and_score(
+        w_sil = config$clustering$scoring_weights$w_sil,
+        w_mod = config$clustering$scoring_weights$w_mod,
+        w_conn = config$clustering$scoring_weights$w_conn,
+        w_stab = config$clustering$scoring_weights$w_stab,
+        singleton_penalty = config$clustering$scoring_weights$singleton_penalty)
+  
+  
+  # Step 10: Creating Final Object on FULL Data
+  # This calls the function defined in 40_generate_final_object.R
+  make_final_object(
+    cfg = config,
+    best_method = best_method, 
+    k = cluster.parameters$k, 
+    resolution = cluster.parameters$resolution
   )
   
-  make_final_object()
+  #Step 11: Automatically update README and summary tables
+  # summarise_cohort() # Ensure this function exists in your utils
   
-  #TODO Final Integration and clustering of full object issue #11 and 13 on github
-  #apply_best_clusters(
-  #  seurat_rds_in = ,
-  #  dims = seq(config$clustering$dims[[1]], config$clustering$dims[[2]]),
-  #  graph_name = config$clustering$graph_name
-  #)
+  writeLines(capture.output(sessionInfo()), paste0(config$paths$results_dir, "/sessionInfo.txt"))
+  
+  log_message("=== Pipeline Finished Successfully ===")
   
   #TODO Cell Annotation issue #12
   # - Canonical Marker Plots for T Cells

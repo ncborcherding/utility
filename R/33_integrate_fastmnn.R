@@ -13,6 +13,8 @@ integrate_fastmnn <- function(preprocessed_obj_path,
   config <- yaml::read_yaml(config_path)
   obj <- readRDS(preprocessed_obj_path)
   
+  integration_timer <- start_timer()
+  
   pcs <- obj@reductions$pca@cell.embeddings[, 1:30]
   idx_list <- split(seq_len(nrow(pcs)), obj$orig.ident)
   pcs_list <- lapply(idx_list, function(i) pcs[i, , drop = FALSE])
@@ -66,6 +68,9 @@ integrate_fastmnn <- function(preprocessed_obj_path,
   )
   
   stop_timer(integration_timer, "fastMNN Integration")
+  
+  # Join Layers
+  obj <- JoinLayers(obj)
   
   output_dir <- file.path(config$paths$results_dir, "04_integrated_data")
   output_path <- file.path(output_dir, "fastmnn.rds")

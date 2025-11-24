@@ -10,3 +10,4 @@
 *.log
 *.pdf
 results/01_bpcells_data
+/results/01_bpcells_data_FULL

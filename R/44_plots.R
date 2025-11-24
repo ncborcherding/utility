@@ -96,7 +96,7 @@ generate_plots <- function(config_path = "config.yaml") {
   for (i in 1:length(config$methods$run)) {
     method_name <- config$methods$run[i]
 
-    png(file.path(paths$figures_dir, paste0("03_radarchart_", method_name, ".pdf")), width = 800, height = 800, res = 150, bg = "white")
+    png(file.path(paths$figures_dir, paste0("03_radarchart_", method_name, ".pdf")), res = 300, width = 800, height = 800, bg = "white")
     radarchart(
       df = radar_data[c(1, 2, i + 2), ],
       title = paste("Performance Profile:", method_name),
@@ -136,7 +136,7 @@ generate_plots <- function(config_path = "config.yaml") {
     
 
     p_combined_umap <- p_umap_batch + p_umap_label
-    ggsave(file.path(paths$figures_dir, paste0("04_umap_", method_name, ".png")), p_combined_umap, width = 14, height = 6, bg = "white")
+    ggsave(file.path(paths$figures_dir, paste0("04_umap_", method_name, ".png")), dpi = 300, p_combined_umap, width = 14, height = 6, bg = "white")
     
     FeatureStatPlot(obj, 
                     palcolor = viridis_pal()(50),
@@ -153,7 +153,7 @@ generate_plots <- function(config_path = "config.yaml") {
     select(Rank, method, GlobalScore, Score_Batch, Score_Label, nmi, ari, ilisi, asw_batch) %>%
     mutate(across(where(is.numeric), ~round(., 3)))
 
-  gt_table <- gt(table_data) %>%
+  gt_table <- gt(data = table_data) %>%
     tab_header(title = "Integration Method Benchmark Rankings") %>%
     cols_label(
       GlobalScore = "Global Score",
