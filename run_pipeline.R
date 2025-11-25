@@ -147,22 +147,15 @@ run_pipeline <- function(config_path) {
     resolution = cluster.parameters$resolution
   )
   
-  #Step 11: Automatically update README and summary tables
-  # summarise_cohort() # Ensure this function exists in your utils
-  
-  writeLines(capture.output(sessionInfo()), paste0(config$paths$results_dir, "/sessionInfo.txt"))
-  
-  log_message("=== Pipeline Finished Successfully ===")
-  
-  #TODO Cell Annotation issue #12
+  #TODO #Step 11: Cell Annotation issue #12
   # - Canonical Marker Plots for T Cells
   # - Cell Type Annotation Plots
   # - Cluster Assignments
   
-  #TODO Export to scanpy/scirpy issue #15 on github
+  #TODO #Step 12: Export to scanpy/scirpy issue #15 on github
   
-  #Step 14: Automatically update README and summary tables
-  summarise_cohort()
+  #Step 13: Automatically update README and summary tables
+  summarise_cohort() 
  
   writeLines(capture.output(sessionInfo()), "/summary/sessionInfo.txt")
   
