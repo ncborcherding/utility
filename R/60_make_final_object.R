@@ -153,8 +153,9 @@ make_final_object <- function(cfg, best_method, k, resolution) {
   VariableFeatures(obj.full) <- variable_features
   
   log_message("Scaling and Running PCA on Full Dataset...")
-  obj.full <- ScaleData(obj.full, features = variable_features)
-  obj.full <- RunPCA(obj.full, npcs = 50, verbose = TRUE)
+  obj.full <- NormalizeData(obj.full, verbose = FALSE)
+  obj.full <- ScaleData(obj.full, features = variable_features, verbose = FALSE)
+  obj.full <- RunPCA(obj.full, npcs = 50, verbose = FALSE)
   
   # 5. Integration
   log_message("Running Integration: ", best_method)
