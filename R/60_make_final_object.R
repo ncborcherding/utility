@@ -170,29 +170,24 @@ make_final_object <- function(cfg, best_method, k, resolution) {
   # Reload for clustering
   obj.integrated <- readRDS(full_integrated_path)
   
-  # 6. Clustering (Optimized)
-  log_message("Building Neighbor Graph (Annoy)...")
-  
+  # 6. Clustering 
   reduction_use <- if(best_method == "harmony") "harmony" else 
     if(best_method %in% c("scvi", "scanvi")) "integrated.dr" else "pca"
   if(!reduction_use %in% names(obj.integrated@reductions)) reduction_use <- "pca"
   
-  # Seurat FindNeighbors uses Annoy for efficiency
-  obj.integrated <- FindNeighbors(
-    obj.integrated, 
-    reduction = reduction_use, 
-    dims = 1:30, 
-    k.param = k,
-    return.neighbor = FALSE,
-    method = "annoy" 
-  )
+  emb <- Embeddings(obj, reduction = reduction_use)
   
-  log_message("Running Leiden Clustering (Resolution ", resolution, ")...")
-  obj.integrated <- FindClusters(
-    obj.integrated, 
-    resolution = resolution, 
-    algorithm = 4
-  )
+  cluster_composite_score <- combine_and_score()
+  
+  log_message("Generating Nearest Neighbors (k = ", cluster_composite_score$k, ")...")
+  g <- bluster::makeKNNGraph(emb, k = cluster_composite_score$k)
+  
+  log_message("Running Leiden Clustering (Resolution ", cluster_composite_score$resolution, ")...")
+  cl <- leidenAlg::leiden.community(g, resolution = cluster_composite_score$resolution)
+  
+  obj.integrated$leiden.cluster <- cl$membership
+  Ident(obj.integrated) <- "leiden.cluster"
+  
   
   # 7. Save Final
   final_out_path <- file.path(cfg$paths$results_dir, "FINAL_integrated_object.rds")
