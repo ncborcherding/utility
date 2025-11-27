@@ -175,7 +175,7 @@ make_final_object <- function(cfg, best_method, k, resolution) {
     if(best_method %in% c("scvi", "scanvi")) "integrated.dr" else "pca"
   if(!reduction_use %in% names(obj.integrated@reductions)) reduction_use <- "pca"
   
-  emb <- Embeddings(obj, reduction = reduction_use)
+  emb <- Embeddings(obj.integrated, reduction = reduction_use)
   
   cluster_composite_score <- combine_and_score()
   
@@ -187,7 +187,6 @@ make_final_object <- function(cfg, best_method, k, resolution) {
   
   obj.integrated$leiden.cluster <- cl$membership
   Ident(obj.integrated) <- "leiden.cluster"
-  
   
   # 7. Save Final
   final_out_path <- file.path(cfg$paths$results_dir, "FINAL_integrated_object.rds")
