@@ -170,13 +170,18 @@ make_final_object <- function(cfg, best_method, k, resolution) {
   # Reload for clustering
   obj.integrated <- readRDS(full_integrated_path)
   
-  # 6. Clustering 
+  # 6. UMAP Embedding
   reduction_use <- if(best_method == "harmony") "harmony" else 
     if(best_method %in% c("scvi", "scanvi")) "integrated.dr" else "pca"
   if(!reduction_use %in% names(obj.integrated@reductions)) reduction_use <- "pca"
   
+  obj.integrated <- RunUMAP(obj.integrated,
+                            reduction = reduction_use,
+                            dims = 1:config$post_integration$n_dims_use,
+                            verbose = FALSE)
+
+  # 7. Clustering 
   emb <- Embeddings(obj.integrated, reduction = reduction_use)
-  
   cluster_composite_score <- combine_and_score()
   
   log_message("Generating Nearest Neighbors (k = ", cluster_composite_score$k, ")...")
@@ -186,9 +191,9 @@ make_final_object <- function(cfg, best_method, k, resolution) {
   cl <- leidenAlg::leiden.community(g, resolution = cluster_composite_score$resolution)
   
   obj.integrated$leiden.cluster <- cl$membership
-  Ident(obj.integrated) <- "leiden.cluster"
+  Idents(obj.integrated) <- "leiden.cluster"
   
-  # 7. Save Final
+  # 8. Save Final
   final_out_path <- file.path(cfg$paths$results_dir, "FINAL_integrated_object.rds")
   log_message("Saving Final Object to: ", final_out_path)
   safe_save_rds(obj.integrated, final_out_path)
