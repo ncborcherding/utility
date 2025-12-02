@@ -139,7 +139,6 @@ run_pipeline <- function(config_path) {
   
   
   # Step 10: Creating Final Object on FULL Data
-  # This calls the function defined in 40_generate_final_object.R
   make_final_object(
     cfg = config,
     best_method = best_method, 
@@ -147,10 +146,16 @@ run_pipeline <- function(config_path) {
     resolution = cluster.parameters$resolution
   )
   
-  #TODO #Step 11: Cell Annotation issue #12
-  # - Canonical Marker Plots for T Cells
-  # - Cell Type Annotation Plots
-  # - Cluster Assignments
+  #Step 11: Cell Annotation issue #12
+  annotation_results <- run_tcell_annotation(
+    obj = readRDS(file.path(cfg$paths$results_dir, "FINAL_integrated_object.rds")),
+    markers_yaml = "tcell_markers.yaml",
+    cluster_col = "leiden.cluster",
+    output_dir = file.path(config$paths$results_dir, "annotations")
+  )
+  plot_annotation_umap(obj, group.by = c("cluster_annotation", "leiden.cluster"))
+  plot_annotation_agreement(obj, c("cluster_annotation", "predicted.celltype.l2"))
+  
   
   #TODO #Step 12: Export to scanpy/scirpy issue #15 on github
   
