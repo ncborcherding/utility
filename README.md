@@ -38,6 +38,22 @@ and 4) adding the TCR information. This information is stored in the meta data o
 
 
 #### Cohort Information
+
+<!-- COHORT_SUMMARY_START -->
+### Cohort Summary
+
+Last Updated: 2025-12-03
+
+|Metric          |Count     |
+|:---------------|:---------|
+|Total Cells     |2,606,129 |
+|Sequencing Runs |722       |
+|Unique Tissues  |13        |
+|Unique Patients |420       |
+|Cells with TCR  |1,841,128 |
+
+<!-- COHORT_SUMMARY_END -->
+
 Here is the current list of data sources, the number of cells that passed filtering by tissue type. **Please cite** the data if you are using uTILity.
 
 
