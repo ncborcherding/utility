@@ -146,16 +146,16 @@ run_pipeline <- function(config_path) {
     resolution = cluster.parameters$resolution
   )
   
-  #Step 11: Cell Annotation issue #12
-  annotation_results <- run_tcell_annotation(
+  #Step 11: Cell Annotation 
+  results <- run_tcell_annotation(
     obj = readRDS(file.path(cfg$paths$results_dir, "FINAL_integrated_object.rds")),
     markers_yaml = "tcell_markers.yaml",
     cluster_col = "leiden.cluster",
-    output_dir = file.path(config$paths$results_dir, "annotations")
+    output_dir = file.path(config$paths$results_dir, "08_annotations"),
+    save_object = FALSE,
+    create_plots = TRUE
   )
-  plot_annotation_umap(obj, group.by = c("cluster_annotation", "leiden.cluster"))
-  plot_annotation_agreement(obj, c("cluster_annotation", "predicted.celltype.l2"))
-  
+  saveRDS(results$object, file.path(cfg$paths$results_dir, "FINAL_integrated_object.rds"))
   
   #TODO #Step 12: Export to scanpy/scirpy issue #15 on github
   
