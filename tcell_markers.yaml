@@ -1,0 +1,221 @@
+# tcell_markers.yaml
+# Canonical T cell markers for hierarchical annotation
+
+# =============================================================================
+# MARKER DEFINITIONS FOR T CELL SUBTYPES
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# LEVEL 1: Major T Cell Lineages
+# -----------------------------------------------------------------------------
+lineages:
+  CD4_T:
+    description: "CD4+ Helper T cells"
+    positive: ["CD4", "CD3D", "CD3E", "CD3G"]
+    negative: ["CD8A", "CD8B", "NCAM1", "NKG7"]
+    optional: []
+    
+  CD8_T:
+    description: "CD8+ Cytotoxic T cells"
+    positive: ["CD8A", "CD8B", "CD3D", "CD3E", "CD3G"]
+    negative: ["CD4", "NCAM1"]
+    optional: ["GZMA", "GZMB", "PRF1"]
+    
+  NK:
+    description: "Natural Killer cells"
+    positive: ["NCAM1", "NKG7", "GNLY", "KLRD1", "KLRF1"]
+    negative: ["CD3D", "CD3E", "CD4"]
+    optional: ["FCGR3A", "KLRB1"]
+    
+  NKT:
+    description: "Natural Killer T cells"
+    positive: ["CD3D", "CD3E", "NCAM1", "NKG7"]
+    negative: []
+    optional: ["KLRB1", "ZBTB16"]
+    
+  gdT:
+    description: "Gamma-delta T cells"
+    positive: ["CD3D", "CD3E", "TRDC", "TRGC1", "TRGC2"]
+    negative: ["CD4", "CD8A"]
+    optional: ["TRDV1", "TRDV2", "TRGV9"]
+    
+  MAIT:
+    description: "Mucosal-associated invariant T cells"
+    positive: ["CD3D", "CD3E", "KLRB1", "SLC4A10", "TRAV1-2"]
+    negative: []
+    optional: ["IL18R1", "NCR3"]
+
+# -----------------------------------------------------------------------------
+# LEVEL 2: CD4+ T Cell Subtypes
+# -----------------------------------------------------------------------------
+cd4_subtypes:
+  CD4_naive:
+    description: "Naive CD4+ T cells"
+    positive: ["CCR7", "SELL", "LEF1", "TCF7", "IL7R"]
+    negative: ["GZMB", "PRF1", "PDCD1", "FOXP3"]
+    optional: ["CD27", "CD28"]
+
+  CD4_Tcm:
+    description: "Central memory CD4+ T cells"
+    positive: ["CCR7", "IL7R", "CD27", "CD28"]
+    negative: ["GZMB", "KLRG1", "FOXP3"]
+    optional: ["SELL", "TCF7"]
+
+  CD4_Tem:
+    description: "Effector memory CD4+ T cells"
+    positive: ["IL7R", "CD44"]
+    negative: ["CCR7", "SELL", "FOXP3"]
+    optional: ["GZMA", "GZMK"]
+
+  Th1:
+    description: "T helper 1 cells"
+    positive: ["TBX21", "IFNG", "TNF", "CXCR3"]
+    negative: ["GATA3", "RORC", "FOXP3", "BCL6"]
+    optional: ["CCR5", "IL12RB2", "STAT4"]
+    
+  Th2:
+    description: "T helper 2 cells"
+    positive: ["GATA3", "IL4", "CCR4"]
+    negative: ["TBX21", "RORC", "FOXP3", "IFNG"]
+    optional: ["IL5", "IL13", "CCR3", "PTGDR2"]
+    
+  Th17:
+    description: "T helper 17 cells"
+    positive: ["RORC", "IL17A", "CCR6", "IL23R"]
+    negative: ["TBX21", "GATA3", "FOXP3"]
+    optional: ["IL17F", "IL22", "AHR", "KLRB1"]
+
+  Th1_Th17:
+    description: "Th1/Th17 hybrid cells"
+    positive: ["TBX21", "RORC", "IFNG", "CCR6", "CXCR3"]
+    negative: ["GATA3", "FOXP3"]
+    optional: ["IL17A"]
+    
+  Tfh:
+    description: "T follicular helper cells"
+    positive: ["BCL6", "CXCR5", "PDCD1", "ICOS"]
+    negative: ["CCR7", "FOXP3", "TBX21"]
+    optional: ["IL21", "MAF", "SH2D1A"]
+    
+  Treg:
+    description: "Regulatory T cells"
+    positive: ["FOXP3", "IL2RA", "CTLA4"]
+    negative: ["IL17A", "IFNG", "IL4"]
+    optional: ["IKZF2", "TNFRSF18", "TIGIT", "ENTPD1"]
+    
+  Treg_naive:
+    description: "Naive regulatory T cells"
+    positive: ["FOXP3", "IL2RA", "CCR7", "LEF1", "SELL"]
+    negative: ["PRDM1", "IL17A", "KLRG1"]
+    optional: ["TCF7"]
+    
+  Treg_memory:
+    description: "Memory/effector regulatory T cells"
+    positive: ["FOXP3", "IL2RA", "CTLA4", "TNFRSF18"]
+    negative: ["CCR7", "LEF1", "SELL"]
+    optional: ["ICOS", "PRDM1", "ENTPD1"]
+
+  CD4_CTL:
+    description: "Cytotoxic CD4+ T cells"
+    positive: ["CD4", "GZMB", "PRF1", "NKG7"]
+    negative: ["FOXP3"]
+    optional: ["GNLY", "GZMA"]
+
+# -----------------------------------------------------------------------------
+# LEVEL 2: CD8+ T Cell Subtypes
+# -----------------------------------------------------------------------------
+cd8_subtypes:
+  CD8_naive:
+    description: "Naive CD8+ T cells"
+    positive: ["CCR7", "SELL", "LEF1", "TCF7", "IL7R"]
+    negative: ["GZMB", "PRF1", "GNLY", "KLRG1", "CX3CR1"]
+    optional: ["CD27", "CD28"]
+    
+  CD8_Tcm:
+    description: "Central memory CD8+ T cells"
+    positive: ["CCR7", "SELL", "IL7R", "CD27"]
+    negative: ["GZMB", "KLRG1", "CX3CR1"]
+    optional: ["CD28", "TCF7"]
+    
+  CD8_Tem:
+    description: "Effector memory CD8+ T cells"
+    positive: ["GZMA", "GZMK", "IL7R"]
+    negative: ["CCR7", "SELL"]
+    optional: ["CD27", "PRF1"]
+    
+  CD8_Temra:
+    description: "Terminally differentiated effector memory"
+    positive: ["GZMB", "PRF1", "GNLY", "KLRG1", "CX3CR1", "FGFBP2"]
+    negative: ["CCR7", "IL7R", "CD27", "CD28", "TCF7"]
+    optional: ["NKG7", "FCGR3A"]
+    
+  CD8_exhausted:
+    description: "Exhausted CD8+ T cells"
+    positive: ["PDCD1", "LAG3", "HAVCR2", "TIGIT", "TOX"]
+    negative: ["TCF7", "IL7R"]
+    optional: ["CTLA4", "ENTPD1", "CXCL13"]
+    
+  CD8_proliferating:
+    description: "Proliferating CD8+ T cells"
+    positive: ["MKI67", "TOP2A", "PCNA", "TYMS"]
+    negative: []
+    optional: ["CDK1", "CCNB1"]
+
+# -----------------------------------------------------------------------------
+# Other T Cell States
+# -----------------------------------------------------------------------------
+other_states:
+  T_proliferating:
+    description: "Proliferating T cells"
+    positive: ["MKI67", "TOP2A", "STMN1", "PCNA"]
+    negative: []
+    optional: ["TYMS", "CDK1"]
+    
+  dnT:
+    description: "Double-negative T cells"
+    positive: ["CD3D", "CD3E"]
+    negative: ["CD4", "CD8A", "CD8B"]
+    optional: []
+
+# -----------------------------------------------------------------------------
+# NK CELL SUBTYPES
+# -----------------------------------------------------------------------------
+nk_subtypes:
+  NK_CD56bright:
+    description: "CD56bright NK cells"
+    positive: ["NCAM1", "NKG7", "GZMK", "SELL", "XCL1"]
+    negative: ["FCGR3A", "CX3CR1"]
+    optional: ["XCL2", "IL7R"]
+    
+  NK_CD56dim:
+    description: "CD56dim NK cells"
+    positive: ["NCAM1", "FCGR3A", "GZMB", "PRF1", "NKG7"]
+    negative: ["SELL", "XCL1"]
+    optional: ["CX3CR1", "FGFBP2"]
+
+# -----------------------------------------------------------------------------
+# SPECIAL POPULATIONS
+# -----------------------------------------------------------------------------
+special:
+  ISG_high:
+    description: "Interferon-stimulated gene high"
+    positive: ["ISG15", "IFI6", "IFIT1", "IFIT3", "MX1"]
+    negative: []
+    optional: ["OAS1", "IFI44L", "STAT1"]
+
+# =============================================================================
+# SCORING PARAMETERS
+# =============================================================================
+scoring:
+  min_expression_percentile: 25
+  positive_weight: 1.0
+  negative_weight: 0.5
+  min_positive_fraction: 0.4
+  max_negative_fraction: 0.3
+  cluster_consensus_threshold: 0.4
+
+# =============================================================================
+# NOTE: Label harmonization is handled in the R code
+# The get_label_harmonization_map() function contains all mappings
+# This avoids YAML duplicate key issues
+# =============================================================================
