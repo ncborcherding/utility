@@ -1,438 +1,502 @@
 # R/80_export_to_scanpy.R
+# 
+# Unified export for both R and Python users
+# Handles massive matrices (>2^31 non-zeros) via chunked export
 
 suppressPackageStartupMessages({
+  
   library(Seurat)
   library(Matrix)
   library(data.table)
   library(yaml)
   library(BPCells)
+  library(rhdf5)  # For direct HDF5 writing
 })
 
 source("R/00_utils.R")
 
-export_to_scanpy <- function(config_path = "config.yaml") {
-  log_message("=== Starting Export to Scanpy/Scirpy ===")
+#' Main export function with chunked support for massive matrices
+#' 
+#' @param config_path Path to config.yaml
+#' @param chunk_size Number of cells per chunk (default: 50000)
+export_to_scanpy <- function(config_path = "config.yaml",
+                             chunk_size = 50000) {
+  
+  log_message("=== Starting Dual-Format Export (R + Python) ===")
   
   config <- yaml::read_yaml(config_path)
   input_path <- file.path(config$paths$results_dir, "FINAL_integrated_object.rds")
-  
   export_dir <- file.path(config$paths$results_dir, "09_scanpy_export")
+  dir.create(export_dir, showWarnings = FALSE, recursive = TRUE)
   
-  if (!file.exists(input_path)) stop("Annotated object not found: ", input_path)
+  if (!file.exists(input_path)) stop("Final object not found: ", input_path)
+  
+  log_message("Loading Seurat object...")
   obj <- readRDS(input_path)
+  n_cells <- ncol(obj)
+  n_genes <- nrow(obj)
+  log_message(sprintf("Loaded object: %s cells x %s genes", 
+                      format(n_cells, big.mark = ","),
+                      format(n_genes, big.mark = ",")))
   
-  # --- 1. Export Counts (Sparse Matrix) ---
-  log_message("Exporting RNA Counts...")
+  # Get counts matrix
   counts <- obj@assays$RNA@layers$counts
   if (is.null(counts)) counts <- obj@assays$RNA@counts
   
-  write_matrix_dir(
-    mat = counts,
-    dir = export_dir
-  )
+  # Estimate nnz
+  nnz_estimate <- tryCatch({
+    # BPCells can give us this info
+    sum(BPCells::matrix_stats(counts)$col_stats["nonzero",])
+  }, error = function(e) {
+    n_cells * 2000  # Rough estimate: ~2000 genes per cell
+  })
   
-  # --- 2. Export Metadata (without VDJ - that goes to AIRR) ---
-  log_message("Exporting Metadata...")
-  obs <- obj@meta.data
-  obs$barcode <- rownames(obs)
+  log_message(sprintf("Estimated non-zeros: %s", format(nnz_estimate, big.mark = ",")))
   
-  # Keep VDJ columns in obs for reference, but mark them
-  vdj_cols <- c("CTaa", "CTnt", "CTgene", "CTstrict", 
-                "clonalFrequency", "clonalProportion", "cloneSize",
-                "TCR1", "TCR2", "cdr3_aa1", "cdr3_aa2", "cdr3_nt1", "cdr3_nt2")
-  for(c in vdj_cols) {
-    if(c %in% colnames(obs)) obs[[c]] <- as.character(obs[[c]])
+  # Check if we need chunked export
+  needs_chunking <- nnz_estimate > 2e9  # 2 billion threshold
+  
+  if (needs_chunking) {
+    log_message("Matrix exceeds dgCMatrix limit - using chunked HDF5 export")
+    h5ad_path <- export_chunked_h5ad(obj, export_dir, chunk_size)
+  } else {
+    log_message("Matrix within limits - using standard export")
+    h5ad_path <- export_standard_h5ad(obj, export_dir)
   }
   
-  fwrite(obs, file = file.path(export_dir, "obs.csv"), row.names = FALSE)
-
-  # --- 3. Export Features ---
-  log_message("Exporting Features...")
-  var <- data.frame(gene_symbols = rownames(obj), row.names = rownames(obj))
-  fwrite(var, file = file.path(export_dir, "var.csv"), row.names = TRUE)
+  # Export AIRR data
+  airr_path <- export_airr_data(obj, export_dir)
   
-  # --- 4. Export Embeddings ---
-  log_message("Exporting Embeddings...")
-  for (red in names(obj@reductions)) {
-    emb <- Embeddings(obj, reduction = red)
-    write.csv(emb, file = file.path(export_dir, paste0("obsm_", red, ".csv")))
-  }
+  # Generate Python scripts
+  generate_helper_scripts(export_dir, has_airr = !is.null(airr_path))
   
-  # --- 5. Export VDJ in AIRR format for scirpy ---
-  log_message("Exporting VDJ data in AIRR format...")
+  # Generate README
+  generate_readme(export_dir, h5ad_path, airr_path, chunked = needs_chunking)
   
-  # Check if we have clonotype data attached
-  has_vdj <- any(c("CTaa", "CTgene") %in% colnames(obj@meta.data))
+  log_message("=== Export Complete ===")
+  log_message(sprintf("Output directory: %s", export_dir))
   
-  if (has_vdj) {
-    log_message("Parsing VDJ from metadata into AIRR format...")
-    airr_df <- parse_screpertoire_to_airr(obj@meta.data)
-    
-    if (!is.null(airr_df) && nrow(airr_df) > 0) {
-      fwrite(airr_df, file = file.path(export_dir, "airr_rearrangement.tsv"), 
-             sep = "\t", row.names = FALSE)
-      log_message(paste0("Exported ", nrow(airr_df), " AIRR chains"))
-    } else {
-      log_message("Warning: Could not parse VDJ data into AIRR format")
-    }
-  }
-  
-  # --- 6. Generate Python Assembler Script ---
-  log_message("Generating Python assembly script...")
-  py_script_path <- file.path(export_dir, "assemble_mudata.py")
-  
-  py_code <- '#!/usr/bin/env python3
-"""
-Assembles exported R data into MuData format compatible with scirpy.
-Requires: scanpy, anndata, muon, scirpy, pandas, scipy
-"""
-
-import scanpy as sc
-import pandas as pd
-import numpy as np
-import scipy.sparse as sp
-import os
-import sys
-import warnings
-
-# Check imports
-try:
-    import anndata
-    import muon as mu
-    import scirpy as ir
-except ImportError as e:
-    print(f"Missing required package: {e}")
-    print("Install with: pip install muon scirpy")
-    sys.exit(1)
-
-print(f"Python Version: {sys.version}")
-print(f"Pandas Version: {pd.__version__}")
-print(f"Anndata Version: {anndata.__version__}")
-print(f"Scirpy Version: {ir.__version__}")
-
-print("\\n--- Assembling MuData from R export ---")
-
-# 1. Load Gene Expression Data
-print("Loading sparse matrix...")
-try:
-    X = sp.io.mmread("matrix.mtx.gz").tocsr().T
-except Exception as e:
-    print(f"Error reading matrix: {e}")
-    sys.exit(1)
-
-obs = pd.read_csv("obs.csv", index_col="barcode")
-var = pd.read_csv("var.csv", index_col=0)
-
-# Verify dimensions
-if X.shape[0] != obs.shape[0]:
-    print(f"Transposing matrix. X: {X.shape}, Obs: {obs.shape}")
-    X = X.T
-
-# Create GEX AnnData
-adata_gex = anndata.AnnData(X=X, obs=obs.copy(), var=var)
-
-# 2. Load Embeddings
-print("Loading embeddings...")
-for f in os.listdir("."):
-    if f.startswith("obsm_") and f.endswith(".csv"):
-        key = f.replace("obsm_", "").replace(".csv", "")
-        emb = pd.read_csv(f, index_col=0).values
-        adata_gex.obsm["X_" + key] = emb
-
-# 3. Load AIRR data for scirpy
-print("\\nProcessing VDJ/AIRR data for Scirpy...")
-
-adata_airr = None
-
-# Option A: Load from AIRR TSV if exported
-if os.path.exists("airr_rearrangement.tsv"):
-    print("Found AIRR rearrangement file, loading with scirpy...")
-    try:
-        adata_airr = ir.io.read_airr("airr_rearrangement.tsv")
-        print(f"Loaded {adata_airr.n_obs} cells with AIRR data")
-    except Exception as e:
-        print(f"Warning: Could not load AIRR file: {e}")
-        adata_airr = None
-
-# Option B: Parse from scRepertoire columns in obs if AIRR file not available
-if adata_airr is None and any(col in obs.columns for col in ["CTgene", "TCR1", "IGH"]):
-    print("Parsing VDJ from scRepertoire columns...")
-    try:
-        adata_airr = parse_screpertoire_obs_to_airr(obs)
-    except Exception as e:
-        print(f"Warning: Could not parse scRepertoire data: {e}")
-
-# 4. Create MuData object
-print("\\nCreating MuData object...")
-
-if adata_airr is not None and adata_airr.n_obs > 0:
-    # Align indices - only keep cells present in both
-    common_cells = adata_gex.obs_names.intersection(adata_airr.obs_names)
-    print(f"Cells with GEX: {adata_gex.n_obs}")
-    print(f"Cells with AIRR: {adata_airr.n_obs}")
-    print(f"Cells in common: {len(common_cells)}")
-    
-    # Create MuData with both modalities
-    mdata = mu.MuData({"gex": adata_gex, "airr": adata_airr})
-    
-    # Run scirpy preprocessing
-    print("\\nRunning scirpy preprocessing...")
-    try:
-        ir.pp.index_chains(mdata)
-        ir.tl.chain_qc(mdata)
-        print("Chain QC complete!")
-        
-        # Show receptor type distribution
-        if "receptor_type" in mdata["airr"].obs.columns:
-            print("\\nReceptor type distribution:")
-            print(mdata["airr"].obs["receptor_type"].value_counts())
-    except Exception as e:
-        print(f"Warning: scirpy preprocessing failed: {e}")
-    
-    # Save as MuData
-    out_file = "final_export.h5mu"
-    mdata.write(out_file)
-    print(f"\\nSuccess! MuData saved to {out_file}")
-    
-    # Also save GEX-only h5ad for basic scanpy use
-    adata_gex.write("gex_only.h5ad")
-    print("GEX-only file saved to gex_only.h5ad")
-    
-else:
-    # No AIRR data - save GEX only
-    print("No AIRR data found, saving GEX-only AnnData...")
-    out_file = "final_seurat_export.h5ad"
-    adata_gex.write(out_file)
-    print(f"Success! File saved to {out_file}")
-
-
-def parse_screpertoire_obs_to_airr(obs_df):
-    """
-    Parse scRepertoire columns from obs into scirpy-compatible AIRR format.
-    
-    scRepertoire stores chains as:
-    - CTgene: "TRAV12-1.TRAJ9.TRAC_TRBV5-1.TRBJ2-7.TRBC2" (underscore-separated)
-    - CTaa: "CAVRGEGFQKLVF_CASSLTDRTYEQYF" (underscore-separated CDR3 aa)
-    - CTnt: nucleotide sequences (underscore-separated)
-    - TCR1/TCR2 or IGH/IGLC: individual chain gene info
-    - cdr3_aa1/cdr3_aa2, cdr3_nt1/cdr3_nt2: individual CDR3 sequences
-    """
-    airr_cells = []
-    
-    for cell_id, row in obs_df.iterrows():
-        cell = ir.io.AirrCell(cell_id=str(cell_id))
-        
-        # Determine if TCR or BCR based on available columns
-        is_tcr = any(col in obs_df.columns for col in ["TCR1", "TCR2"])
-        is_bcr = any(col in obs_df.columns for col in ["IGH", "IGLC", "IGK", "IGL"])
-        
-        chains_added = False
-        
-        if is_tcr:
-            # Parse TCR chains
-            for chain_idx, (chain_col, cdr3_aa_col, cdr3_nt_col) in enumerate([
-                ("TCR1", "cdr3_aa1", "cdr3_nt1"),
-                ("TCR2", "cdr3_aa2", "cdr3_nt2")
-            ]):
-                if chain_col in obs_df.columns and pd.notna(row.get(chain_col)):
-                    chain_dict = ir.io.AirrCell.empty_chain_dict()
-                    gene_str = str(row[chain_col])
-                    
-                    # Parse gene string like "TRAV12-1.TRAJ9.TRAC"
-                    genes = gene_str.split(".")
-                    
-                    # Determine locus from V gene
-                    if genes and len(genes) > 0:
-                        v_gene = genes[0] if genes[0] != "None" else None
-                        if v_gene:
-                            if v_gene.startswith("TRA"):
-                                chain_dict["locus"] = "TRA"
-                            elif v_gene.startswith("TRB"):
-                                chain_dict["locus"] = "TRB"
-                            elif v_gene.startswith("TRG"):
-                                chain_dict["locus"] = "TRG"
-                            elif v_gene.startswith("TRD"):
-                                chain_dict["locus"] = "TRD"
-                            
-                            chain_dict["v_call"] = v_gene
-                        
-                        # Parse other genes
-                        for gene in genes[1:]:
-                            if gene and gene != "None":
-                                if "J" in gene[:3]:
-                                    chain_dict["j_call"] = gene
-                                elif "D" in gene[:3]:
-                                    chain_dict["d_call"] = gene
-                                elif "C" in gene[:3]:
-                                    chain_dict["c_call"] = gene
-                    
-                    # Add CDR3 sequences
-                    if cdr3_aa_col in obs_df.columns and pd.notna(row.get(cdr3_aa_col)):
-                        chain_dict["junction_aa"] = str(row[cdr3_aa_col])
-                    if cdr3_nt_col in obs_df.columns and pd.notna(row.get(cdr3_nt_col)):
-                        chain_dict["junction"] = str(row[cdr3_nt_col])
-                    
-                    chain_dict["productive"] = True  # Assume productive if in scRepertoire output
-                    
-                    if chain_dict.get("locus"):
-                        cell.add_chain(chain_dict)
-                        chains_added = True
-        
-        elif is_bcr:
-            # Parse BCR chains (IGH, IGK/IGL)
-            for chain_col, cdr3_aa_col, cdr3_nt_col, locus in [
-                ("IGH", "cdr3_aa1", "cdr3_nt1", "IGH"),
-                ("IGLC", "cdr3_aa2", "cdr3_nt2", None),  # Could be IGK or IGL
-            ]:
-                if chain_col in obs_df.columns and pd.notna(row.get(chain_col)):
-                    chain_dict = ir.io.AirrCell.empty_chain_dict()
-                    gene_str = str(row[chain_col])
-                    genes = gene_str.split(".")
-                    
-                    if genes and len(genes) > 0:
-                        v_gene = genes[0] if genes[0] != "None" else None
-                        if v_gene:
-                            # Determine locus from V gene for light chains
-                            if v_gene.startswith("IGH"):
-                                chain_dict["locus"] = "IGH"
-                            elif v_gene.startswith("IGK"):
-                                chain_dict["locus"] = "IGK"
-                            elif v_gene.startswith("IGL"):
-                                chain_dict["locus"] = "IGL"
-                            elif locus:
-                                chain_dict["locus"] = locus
-                            
-                            chain_dict["v_call"] = v_gene
-                        
-                        for gene in genes[1:]:
-                            if gene and gene != "None":
-                                if "J" in gene[:4]:
-                                    chain_dict["j_call"] = gene
-                                elif "D" in gene[:4]:
-                                    chain_dict["d_call"] = gene
-                                elif "C" in gene[:4]:
-                                    chain_dict["c_call"] = gene
-                    
-                    if cdr3_aa_col in obs_df.columns and pd.notna(row.get(cdr3_aa_col)):
-                        chain_dict["junction_aa"] = str(row[cdr3_aa_col])
-                    if cdr3_nt_col in obs_df.columns and pd.notna(row.get(cdr3_nt_col)):
-                        chain_dict["junction"] = str(row[cdr3_nt_col])
-                    
-                    chain_dict["productive"] = True
-                    
-                    if chain_dict.get("locus"):
-                        cell.add_chain(chain_dict)
-                        chains_added = True
-        
-        # Fallback: parse from combined CT columns
-        if not chains_added and "CTgene" in obs_df.columns and pd.notna(row.get("CTgene")):
-            ct_gene = str(row["CTgene"])
-            ct_aa = str(row.get("CTaa", "")) if pd.notna(row.get("CTaa")) else ""
-            ct_nt = str(row.get("CTnt", "")) if pd.notna(row.get("CTnt")) else ""
-            
-            # Split by underscore (scRepertoire convention)
-            gene_parts = ct_gene.split("_")
-            aa_parts = ct_aa.split("_") if ct_aa else [""] * len(gene_parts)
-            nt_parts = ct_nt.split("_") if ct_nt else [""] * len(gene_parts)
-            
-            for i, gene_str in enumerate(gene_parts):
-                if gene_str and gene_str != "NA":
-                    chain_dict = ir.io.AirrCell.empty_chain_dict()
-                    genes = gene_str.split(".")
-                    
-                    if genes:
-                        v_gene = genes[0] if genes[0] != "None" else None
-                        if v_gene:
-                            # Infer locus
-                            if v_gene.startswith("TRA"):
-                                chain_dict["locus"] = "TRA"
-                            elif v_gene.startswith("TRB"):
-                                chain_dict["locus"] = "TRB"
-                            elif v_gene.startswith("TRG"):
-                                chain_dict["locus"] = "TRG"
-                            elif v_gene.startswith("TRD"):
-                                chain_dict["locus"] = "TRD"
-                            elif v_gene.startswith("IGH"):
-                                chain_dict["locus"] = "IGH"
-                            elif v_gene.startswith("IGK"):
-                                chain_dict["locus"] = "IGK"
-                            elif v_gene.startswith("IGL"):
-                                chain_dict["locus"] = "IGL"
-                            
-                            chain_dict["v_call"] = v_gene
-                        
-                        for gene in genes[1:]:
-                            if gene and gene != "None":
-                                if "J" in gene[:4]:
-                                    chain_dict["j_call"] = gene
-                                elif "D" in gene[:4]:
-                                    chain_dict["d_call"] = gene
-                                elif "C" in gene[:4]:
-                                    chain_dict["c_call"] = gene
-                    
-                    if i < len(aa_parts) and aa_parts[i] and aa_parts[i] != "NA":
-                        chain_dict["junction_aa"] = aa_parts[i]
-                    if i < len(nt_parts) and nt_parts[i] and nt_parts[i] != "NA":
-                        chain_dict["junction"] = nt_parts[i]
-                    
-                    chain_dict["productive"] = True
-                    
-                    if chain_dict.get("locus"):
-                        cell.add_chain(chain_dict)
-                        chains_added = True
-        
-        if chains_added:
-            airr_cells.append(cell)
-    
-    if airr_cells:
-        return ir.io.from_airr_cells(airr_cells)
-    return None
-
-
-if __name__ == "__main__":
-    # Change to export directory if running standalone
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dir", default=".", help="Export directory")
-    args = parser.parse_args()
-    
-    os.chdir(args.dir)
-    
-    # Run assembly
-    exec(open("assemble_mudata.py").read().split("if __name__")[0])
-'
-  
-  writeLines(py_code, py_script_path)
-  
-  log_message("Export complete!")
-  log_message(paste0("Run: cd ", export_dir, " && python3 assemble_mudata.py"))
+  return(invisible(export_dir))
 }
 
 
-#' Parse scRepertoire metadata columns into AIRR-compliant format
+#' Export massive matrix in chunks directly to H5AD format
 #' 
-#' @param meta_data Seurat metadata data.frame with scRepertoire columns
-#' @return data.frame in AIRR rearrangement format
-parse_screpertoire_to_airr <- function(meta_data) {
+#' This writes directly to HDF5 without creating a dgCMatrix,
+#' bypassing the 2^31 non-zero limit.
+export_chunked_h5ad <- function(obj, export_dir, chunk_size = 50000) {
   
-  # Check what columns we have (Global check)
-  has_individual_chains <- any(c("TCR1", "TCR2", "IGH", "IGLC") %in% colnames(meta_data))
-  has_combined <- "CTgene" %in% colnames(meta_data)
+  h5ad_path <- file.path(export_dir, "adata.h5ad")
   
-  if (!has_individual_chains && !has_combined) {
+  # Remove existing file
+  if (file.exists(h5ad_path)) unlink(h5ad_path)
+  
+  log_message("Creating H5AD file with chunked matrix export...")
+  
+  # Get dimensions
+  counts <- obj@assays$RNA@layers$counts
+  if (is.null(counts)) counts <- obj@assays$RNA@counts
+  
+  n_cells <- ncol(obj)
+  n_genes <- nrow(obj)
+  cell_names <- colnames(obj)
+  gene_names <- rownames(obj)
+  
+  # Create HDF5 file with H5AD structure
+  h5createFile(h5ad_path)
+  
+  # Calculate chunks
+  n_chunks <- ceiling(n_cells / chunk_size)
+  log_message(sprintf("Processing %d chunks of ~%d cells each", n_chunks, chunk_size))
+  
+  # We'll collect CSR components across chunks
+  all_data <- list()
+  all_indices <- list()
+  indptr <- 0L  # Running pointer
+  indptr_vec <- c(0L)
+  
+  for (i in seq_len(n_chunks)) {
+    start_idx <- (i - 1) * chunk_size + 1
+    end_idx <- min(i * chunk_size, n_cells)
+    
+    log_message(sprintf("  Chunk %d/%d: cells %d-%d", i, n_chunks, start_idx, end_idx))
+    
+    # Extract chunk using BPCells (memory-efficient)
+    chunk_cells <- cell_names[start_idx:end_idx]
+    chunk_counts <- counts[, start_idx:end_idx, drop = FALSE]
+    
+    # Convert this smaller chunk to dgCMatrix
+    chunk_sparse <- as(chunk_counts, "dgCMatrix")
+    
+    # Extract CSR components (we need to transpose for AnnData which is cells x genes)
+    # dgCMatrix is CSC (genes x cells), we need CSR (cells x genes)
+    chunk_csr <- as(t(chunk_sparse), "RsparseMatrix")
+    
+    # Collect data
+    all_data[[i]] <- chunk_csr@x
+    all_indices[[i]] <- chunk_csr@j  # Column indices (genes)
+    
+    # Update indptr (row pointers for cells)
+    chunk_indptr <- chunk_csr@p[-1]  # Remove first 0
+    indptr_vec <- c(indptr_vec, chunk_indptr + indptr)
+    indptr <- indptr_vec[length(indptr_vec)]
+    
+    rm(chunk_sparse, chunk_csr, chunk_counts)
+    gc()
+  }
+  
+  # Combine all chunks
+  log_message("Combining chunks and writing to H5AD...")
+  
+  combined_data <- unlist(all_data)
+  combined_indices <- unlist(all_indices)
+  
+  rm(all_data, all_indices)
+  gc()
+  
+  # Write to HDF5 in AnnData format
+  # AnnData stores X in CSR format under /X with data, indices, indptr
+  
+  # Create groups
+  h5createGroup(h5ad_path, "X")
+  h5createGroup(h5ad_path, "obs")
+  h5createGroup(h5ad_path, "var")
+  h5createGroup(h5ad_path, "obsm")
+  h5createGroup(h5ad_path, "uns")
+  
+  # Write sparse matrix in CSR format
+  h5write(combined_data, h5ad_path, "X/data")
+  h5write(as.integer(combined_indices), h5ad_path, "X/indices")
+  h5write(as.integer(indptr_vec), h5ad_path, "X/indptr")
+  
+  # Write shape attribute
+  h5write(c(n_cells, n_genes), h5ad_path, "X/shape")
+  
+  # Add encoding metadata for AnnData
+  fid <- H5Fopen(h5ad_path)
+  gid <- H5Gopen(fid, "X")
+  h5writeAttribute("csr_matrix", gid, "encoding-type")
+  h5writeAttribute("0.1.0", gid, "encoding-version")
+  H5Gclose(gid)
+  H5Fclose(fid)
+  
+  rm(combined_data, combined_indices, indptr_vec)
+  gc()
+  
+  # Write obs (cell metadata)
+  log_message("Writing cell metadata...")
+  write_obs_to_h5ad(obj@meta.data, h5ad_path, cell_names)
+  
+  # Write var (gene metadata)
+  log_message("Writing gene metadata...")
+  write_var_to_h5ad(gene_names, h5ad_path)
+  
+  # Write embeddings
+  log_message("Writing embeddings...")
+  write_obsm_to_h5ad(obj, h5ad_path)
+  
+  log_message(sprintf("H5AD saved: %s", h5ad_path))
+  return(h5ad_path)
+}
+
+
+#' Write obs (cell metadata) to H5AD
+write_obs_to_h5ad <- function(meta_data, h5ad_path, cell_names) {
+  
+  # Write index (cell barcodes)
+  h5write(cell_names, h5ad_path, "obs/_index")
+  
+  # Add index attribute
+  fid <- H5Fopen(h5ad_path)
+  gid <- H5Gopen(fid, "obs")
+  h5writeAttribute("_index", gid, "_index")
+  h5writeAttribute(c("_index", colnames(meta_data)), gid, "column-order")
+  h5writeAttribute("dataframe", gid, "encoding-type")
+  h5writeAttribute("0.2.0", gid, "encoding-version")
+  H5Gclose(gid)
+  H5Fclose(fid)
+  
+  # Write each column
+  for (col in colnames(meta_data)) {
+    values <- meta_data[[col]]
+    
+    if (is.factor(values)) {
+      # Categorical encoding for AnnData
+      h5createGroup(h5ad_path, paste0("obs/", col))
+      h5write(as.integer(values) - 1L, h5ad_path, paste0("obs/", col, "/codes"))
+      h5write(levels(values), h5ad_path, paste0("obs/", col, "/categories"))
+      
+      # Add categorical attributes
+      fid <- H5Fopen(h5ad_path)
+      gid <- H5Gopen(fid, paste0("obs/", col))
+      h5writeAttribute("categorical", gid, "encoding-type")
+      h5writeAttribute("0.2.0", gid, "encoding-version")
+      h5writeAttribute(FALSE, gid, "ordered")
+      H5Gclose(gid)
+      H5Fclose(fid)
+      
+    } else if (is.character(values)) {
+      h5write(values, h5ad_path, paste0("obs/", col))
+      
+    } else if (is.numeric(values)) {
+      h5write(as.numeric(values), h5ad_path, paste0("obs/", col))
+      
+    } else if (is.logical(values)) {
+      h5write(as.integer(values), h5ad_path, paste0("obs/", col))
+    }
+  }
+}
+
+
+#' Write var (gene metadata) to H5AD
+write_var_to_h5ad <- function(gene_names, h5ad_path) {
+  
+  # Write index (gene names)
+  h5write(gene_names, h5ad_path, "var/_index")
+  
+  # Add attributes
+  fid <- H5Fopen(h5ad_path)
+  gid <- H5Gopen(fid, "var")
+  h5writeAttribute("_index", gid, "_index")
+  h5writeAttribute(c("_index"), gid, "column-order")
+  h5writeAttribute("dataframe", gid, "encoding-type")
+  h5writeAttribute("0.2.0", gid, "encoding-version")
+  H5Gclose(gid)
+  H5Fclose(fid)
+}
+
+
+#' Write obsm (embeddings) to H5AD
+write_obsm_to_h5ad <- function(obj, h5ad_path) {
+  
+  for (red_name in names(obj@reductions)) {
+    emb <- Embeddings(obj, reduction = red_name)
+    key <- paste0("X_", red_name)
+    
+    h5write(emb, h5ad_path, paste0("obsm/", key))
+    log_message(sprintf("  Wrote embedding: %s (%d dims)", key, ncol(emb)))
+  }
+  
+  # Add obsm encoding
+  fid <- H5Fopen(h5ad_path)
+  gid <- H5Gopen(fid, "obsm")
+  h5writeAttribute("dict", gid, "encoding-type")
+  h5writeAttribute("0.1.0", gid, "encoding-version")
+  H5Gclose(gid)
+  H5Fclose(fid)
+}
+
+
+#' Standard export for smaller matrices
+export_standard_h5ad <- function(obj, export_dir) {
+  
+  # Try available packages
+  if (requireNamespace("anndataR", quietly = TRUE)) {
+    library(anndataR)
+    h5ad_path <- file.path(export_dir, "adata.h5ad")
+    adata <- from_Seurat(obj)
+    write_h5ad(adata, h5ad_path)
+    return(h5ad_path)
+  }
+  
+  if (requireNamespace("zellkonverter", quietly = TRUE)) {
+    library(zellkonverter)
+    library(SingleCellExperiment)
+    h5ad_path <- file.path(export_dir, "adata.h5ad")
+    sce <- as.SingleCellExperiment(obj)
+    writeH5AD(sce, file = h5ad_path, X_name = "counts")
+    return(h5ad_path)
+  }
+  
+  # Fallback to our chunked method even for smaller matrices
+  log_message("No standard H5AD package found, using direct HDF5 export")
+  return(export_chunked_h5ad(obj, export_dir, chunk_size = 100000))
+}
+
+
+#' Export AIRR data from scRepertoire columns
+export_airr_data <- function(obj, export_dir) {
+  
+  has_vdj <- any(c("CTaa", "CTgene", "TCR1", "IGH") %in% colnames(obj@meta.data))
+  
+  if (!has_vdj) {
+    log_message("No VDJ data found in metadata")
     return(NULL)
   }
   
-  # Use lapply to process each row independently
-  # This returns a nested list: List of Cells -> List of Chains
+  log_message("Exporting VDJ data in AIRR format...")
+  airr_df <- parse_screpertoire_to_airr(obj@meta.data)
+  
+  if (!is.null(airr_df) && nrow(airr_df) > 0) {
+    airr_path <- file.path(export_dir, "airr_rearrangement.tsv")
+    fwrite(airr_df, file = airr_path, sep = "\t", row.names = FALSE)
+    log_message(sprintf("Exported %s AIRR chain records", 
+                        format(nrow(airr_df), big.mark = ",")))
+    return(airr_path)
+  }
+  
+  return(NULL)
+}
+
+
+#' Generate helper Python scripts
+generate_helper_scripts <- function(export_dir, has_airr = FALSE) {
+  
+  # Script to verify and optionally fix the H5AD
+  verify_script <- '#!/usr/bin/env python3
+"""
+Verify and load the exported H5AD file.
+Optionally creates MuData with AIRR data.
+
+Usage:
+    python3 load_data.py
+"""
+
+import os
+import sys
+
+try:
+    import scanpy as sc
+    import anndata as ad
+    import pandas as pd
+    import numpy as np
+except ImportError as e:
+    print(f"Missing package: {e}")
+    print("Install with: pip install scanpy anndata pandas")
+    sys.exit(1)
+
+print(f"Scanpy version: {sc.__version__}")
+print(f"AnnData version: {ad.__version__}")
+
+# Load H5AD
+print("\\nLoading adata.h5ad...")
+try:
+    adata = sc.read_h5ad("adata.h5ad")
+    print(f"Successfully loaded: {adata.n_obs} cells x {adata.n_vars} genes")
+    print(f"\\nObservations (obs): {list(adata.obs.columns)[:10]}...")
+    print(f"Embeddings (obsm): {list(adata.obsm.keys())}")
+    
+    # Basic QC
+    print(f"\\nMatrix stats:")
+    print(f"  Shape: {adata.X.shape}")
+    print(f"  Non-zeros: {adata.X.nnz:,}")
+    print(f"  Density: {adata.X.nnz / (adata.n_obs * adata.n_vars) * 100:.2f}%")
+    
+except Exception as e:
+    print(f"Error loading H5AD: {e}")
+    print("\\nTrying to diagnose...")
+    
+    import h5py
+    with h5py.File("adata.h5ad", "r") as f:
+        print("HDF5 structure:")
+        def print_structure(name, obj):
+            print(f"  {name}: {type(obj).__name__}")
+        f.visititems(print_structure)
+    sys.exit(1)
+
+# Load AIRR and create MuData if available
+if os.path.exists("airr_rearrangement.tsv"):
+    print("\\n--- Loading AIRR data ---")
+    try:
+        import scirpy as ir
+        import muon as mu
+        
+        adata_airr = ir.io.read_airr("airr_rearrangement.tsv")
+        print(f"AIRR data: {adata_airr.n_obs} cells")
+        
+        # Create MuData
+        print("\\nCreating MuData...")
+        mdata = mu.MuData({"gex": adata, "airr": adata_airr})
+        
+        # Run scirpy QC
+        ir.pp.index_chains(mdata)
+        ir.tl.chain_qc(mdata)
+        
+        if "receptor_type" in mdata["airr"].obs.columns:
+            print("\\nReceptor types:")
+            print(mdata["airr"].obs["receptor_type"].value_counts())
+        
+        # Save MuData
+        mdata.write("mudata.h5mu")
+        print("\\nSaved: mudata.h5mu")
+        
+    except ImportError:
+        print("scirpy/muon not installed - skipping MuData creation")
+        print("Install with: pip install scirpy muon")
+    except Exception as e:
+        print(f"Error with AIRR data: {e}")
+
+print("\\nDone!")
+'
+  
+  writeLines(verify_script, file.path(export_dir, "load_data.py"))
+  log_message("Generated load_data.py")
+}
+
+
+#' Generate README
+generate_readme <- function(export_dir, h5ad_path, airr_path, chunked = FALSE) {
+  
+  readme <- sprintf('# Single-Cell Data Export
+
+## Files
+
+- `adata.h5ad` - AnnData object (gene expression, metadata, embeddings)
+%s
+- `load_data.py` - Python script to load and verify data
+
+## Quick Start (Python)
+
+```python
+import scanpy as sc
+
+# Load gene expression data
+adata = sc.read_h5ad("adata.h5ad")
+print(adata)
+
+# With TCR/BCR data:
+import muon as mu
+mdata = mu.read("mudata.h5mu")  # Run load_data.py first to create this
+```
+
+## Quick Start (R)
+
+```r
+library(Seurat)
+obj <- readRDS("../FINAL_integrated_object.rds")
+```
+
+## Notes
+
+%s
+
+Generated: %s
+',
+                    if (!is.null(airr_path)) "- `airr_rearrangement.tsv` - TCR/BCR in AIRR format\n- `mudata.h5mu` - Combined GEX+AIRR (created by load_data.py)" else "",
+                    if (chunked) "- This dataset was exported using chunked HDF5 writing due to its large size\n- The matrix has >2 billion non-zero entries" else "",
+                    Sys.time()
+  )
+  
+  writeLines(readme, file.path(export_dir, "README.md"))
+}
+
+
+# =============================================================================
+# AIRR Parsing Functions
+# =============================================================================
+
+parse_screpertoire_to_airr <- function(meta_data) {
+  
+  has_individual_chains <- any(c("TCR1", "TCR2", "IGH", "IGLC") %in% colnames(meta_data))
+  has_combined <- "CTgene" %in% colnames(meta_data)
+  
+  if (!has_individual_chains && !has_combined) return(NULL)
+  
   nested_rows <- lapply(seq_len(nrow(meta_data)), function(i) {
     cell_id <- rownames(meta_data)[i]
     row <- meta_data[i, , drop = FALSE]
-    
-    # Store rows for THIS cell only
     cell_airr_rows <- list()
     
-    # 1. Try individual chain columns
     if (has_individual_chains) {
       chain_specs <- list(
         list(gene_col = "TCR1", aa_col = "cdr3_aa1", nt_col = "cdr3_nt1"),
@@ -452,16 +516,12 @@ parse_screpertoire_to_airr <- function(meta_data) {
               cdr3_aa = if(spec$aa_col %in% colnames(meta_data)) as.character(row[[spec$aa_col]]) else NA,
               cdr3_nt = if(spec$nt_col %in% colnames(meta_data)) as.character(row[[spec$nt_col]]) else NA
             )
-            if (!is.null(airr_row)) {
-              cell_airr_rows[[length(cell_airr_rows) + 1]] <- airr_row
-            }
+            if (!is.null(airr_row)) cell_airr_rows[[length(cell_airr_rows) + 1]] <- airr_row
           }
         }
       }
     }
     
-    # 2. Fallback to combined columns
-    # We check length(cell_airr_rows) which is local to this specific cell iteration
     if (length(cell_airr_rows) == 0 && has_combined && !is.na(row[["CTgene"]])) {
       ct_gene <- as.character(row[["CTgene"]])
       ct_aa <- if("CTaa" %in% colnames(meta_data)) as.character(row[["CTaa"]]) else ""
@@ -480,9 +540,7 @@ parse_screpertoire_to_airr <- function(meta_data) {
               cdr3_aa = if(j <= length(aa_parts)) aa_parts[j] else NA,
               cdr3_nt = if(j <= length(nt_parts)) nt_parts[j] else NA
             )
-            if (!is.null(airr_row)) {
-              cell_airr_rows[[length(cell_airr_rows) + 1]] <- airr_row
-            }
+            if (!is.null(airr_row)) cell_airr_rows[[length(cell_airr_rows) + 1]] <- airr_row
           }
         }
       }
@@ -491,12 +549,57 @@ parse_screpertoire_to_airr <- function(meta_data) {
     return(cell_airr_rows)
   })
   
-  # Flatten the list of lists (Cell -> Chains) into a single list of Chains
-  # recursive = FALSE is critical here to only unwrap the top level (cells)
   airr_rows <- unlist(nested_rows, recursive = FALSE)
   
   if (!is.null(airr_rows) && length(airr_rows) > 0) {
     return(do.call(rbind, lapply(airr_rows, as.data.frame)))
   }
+  return(NULL)
+}
+
+
+parse_gene_string_to_airr <- function(cell_id, gene_str, cdr3_aa = NA, cdr3_nt = NA) {
+  genes <- strsplit(gene_str, "\\.")[[1]]
+  
+  if (length(genes) == 0 || all(genes == "None") || all(genes == "NA")) return(NULL)
+  
+  airr_row <- list(
+    cell_id = cell_id,
+    sequence_id = paste0(cell_id, "_", gene_str),
+    locus = NA_character_,
+    productive = TRUE,
+    v_call = NA_character_,
+    d_call = NA_character_,
+    j_call = NA_character_,
+    c_call = NA_character_,
+    junction_aa = NA_character_,
+    junction = NA_character_
+  )
+  
+  v_gene <- genes[1]
+  if (!is.na(v_gene) && v_gene != "None" && v_gene != "") {
+    airr_row$v_call <- v_gene
+    
+    if (grepl("^TRA", v_gene)) airr_row$locus <- "TRA"
+    else if (grepl("^TRB", v_gene)) airr_row$locus <- "TRB"
+    else if (grepl("^TRG", v_gene)) airr_row$locus <- "TRG"
+    else if (grepl("^TRD", v_gene)) airr_row$locus <- "TRD"
+    else if (grepl("^IGH", v_gene)) airr_row$locus <- "IGH"
+    else if (grepl("^IGK", v_gene)) airr_row$locus <- "IGK"
+    else if (grepl("^IGL", v_gene)) airr_row$locus <- "IGL"
+  }
+  
+  for (gene in genes[-1]) {
+    if (!is.na(gene) && gene != "None" && gene != "") {
+      if (grepl("^TR[ABDG]J|^IG[HKL]J", gene)) airr_row$j_call <- gene
+      else if (grepl("^TR[BD]D|^IGHD", gene)) airr_row$d_call <- gene
+      else if (grepl("^TR[ABDG]C|^IG[HKL]C|^IGH[MGDEA]", gene)) airr_row$c_call <- gene
+    }
+  }
+  
+  if (!is.na(cdr3_aa) && cdr3_aa != "" && cdr3_aa != "NA") airr_row$junction_aa <- cdr3_aa
+  if (!is.na(cdr3_nt) && cdr3_nt != "" && cdr3_nt != "NA") airr_row$junction <- cdr3_nt
+  
+  if (!is.na(airr_row$locus)) return(airr_row)
   return(NULL)
 }
