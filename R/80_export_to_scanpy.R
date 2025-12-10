@@ -20,33 +20,238 @@ source("R/00_utils.R")
 # =============================================================================
 
 #' Write a fixed-size integer array attribute (required for 'shape')
-#' This ensures the attribute is written with H5T_NATIVE_INT64 type
-#' which h5py/anndata can properly read
+#' Uses h5py via reticulate to ensure proper INT64 type that anndata expects
 write_int_array_attribute <- function(h5file, group_path, attr_name, values) {
-  fid <- H5Fopen(h5file)
-  on.exit(H5Fclose(fid), add = TRUE)
   
-  gid <- H5Gopen(fid, group_path)
-  on.exit(H5Gclose(gid), add = TRUE, after = FALSE)
+  # First try using rhdf5's low-level API with explicit namespace
+  tryCatch({
+    fid <- H5Fopen(h5file)
+    gid <- H5Gopen(fid, group_path)
+    
+    # Try to delete existing attribute if present
+    if (H5Aexists(gid, attr_name)) {
+      H5Adelete(gid, attr_name)
+    }
+    
+    # Try low-level API for proper int64 type
+    sid <- rhdf5::H5Screate_simple(dims = length(values))
+    tid <- rhdf5::H5Tcopy("H5T_NATIVE_INT64")
+    aid <- rhdf5::H5Acreate(gid, attr_name, tid, sid)
+    rhdf5::H5Awrite(aid, as.integer(values))
+    
+    rhdf5::H5Aclose(aid)
+    rhdf5::H5Tclose(tid)
+    rhdf5::H5Sclose(sid)
+    H5Gclose(gid)
+    H5Fclose(fid)
+    
+    return(invisible(TRUE))
+    
+  }, error = function(e) {
+    # Low-level API not available, try h5writeAttribute
+    tryCatch({
+      H5Gclose(gid)
+      H5Fclose(fid)
+    }, error = function(e2) {})
+    
+    # Fall back to h5writeAttribute - may need Python fix later
+    tryCatch({
+      fid <- H5Fopen(h5file)
+      gid <- H5Gopen(fid, group_path)
+      h5writeAttribute(as.integer(values), gid, attr_name)
+      H5Gclose(gid)
+      H5Fclose(fid)
+    }, error = function(e3) {
+      warning("Could not write shape attribute via rhdf5: ", e3$message)
+    })
+    
+    # Use Python/h5py to fix the attribute type if reticulate available
+    if (requireNamespace("reticulate", quietly = TRUE)) {
+      fix_shape_with_python(h5file, group_path, attr_name, values)
+    }
+    
+    return(invisible(TRUE))
+  })
+}
+
+
+#' Fix shape attribute using h5py (ensures proper int64 numpy array)
+fix_shape_with_python <- function(h5file, group_path, attr_name, values) {
   
-  # Delete existing attribute if present
-  if (H5Aexists(gid, attr_name)) {
-    H5Adelete(gid, attr_name)
+  if (!requireNamespace("reticulate", quietly = TRUE)) {
+    warning("reticulate not available - shape attribute may not be readable by anndata")
+    return(invisible(FALSE))
   }
   
-  # Create dataspace for fixed-size 1D array
-  sid <- H5Screate_simple(dims = length(values))
-  on.exit(H5Sclose(sid), add = TRUE, after = FALSE)
+  tryCatch({
+    py_code <- sprintf('
+import h5py
+import numpy as np
+
+with h5py.File("%s", "a") as f:
+    grp = f["%s"]
+    # Delete existing attribute if present
+    if "%s" in grp.attrs:
+        del grp.attrs["%s"]
+    # Write as proper int64 numpy array
+    grp.attrs["%s"] = np.array([%s], dtype=np.int64)
+', h5file, group_path, attr_name, attr_name, attr_name, paste(values, collapse = ", "))
+    
+    reticulate::py_run_string(py_code)
+    return(invisible(TRUE))
+    
+  }, error = function(e) {
+    warning("Could not fix shape with Python: ", e$message)
+    return(invisible(FALSE))
+  })
+}
+
+
+#' Finalize H5AD file using Python/h5py to ensure correct encoding
+#' This fixes all encoding attributes to be compatible with anndata
+finalize_h5ad_with_python <- function(h5file, n_cells, n_genes) {
   
-  # Use 64-bit integer type (critical for h5py compatibility)
-  tid <- H5Tcopy("H5T_NATIVE_INT64")
-  on.exit(H5Tclose(tid), add = TRUE, after = FALSE)
+  if (!requireNamespace("reticulate", quietly = TRUE)) {
+    warning("reticulate not available - H5AD may not be readable by anndata")
+    return(invisible(FALSE))
+  }
   
-  # Create and write the attribute
-  aid <- H5Acreate(gid, attr_name, tid, sid)
-  on.exit(H5Aclose(aid), add = TRUE, after = FALSE)
+  log_message("  Finalizing H5AD encoding with Python...")
   
-  H5Awrite(aid, as.integer(values))
+  tryCatch({
+    py_code <- sprintf('
+import h5py
+import numpy as np
+
+with h5py.File("%s", "a") as f:
+    # Fix X group encoding
+    if "X" in f:
+        x = f["X"]
+        for attr in list(x.attrs.keys()):
+            del x.attrs[attr]
+        x.attrs["encoding-type"] = "csr_matrix"
+        x.attrs["encoding-version"] = "0.1.0"
+        x.attrs.create("shape", data=np.array([%d, %d], dtype=np.int64))
+    
+    # Fix obs group and all its columns
+    if "obs" in f:
+        obs = f["obs"]
+        
+        # Get column-order if exists
+        col_order = None
+        if "column-order" in obs.attrs:
+            col_order_raw = obs.attrs["column-order"]
+            if hasattr(col_order_raw, "tolist"):
+                col_order = [c.decode("utf-8") if isinstance(c, bytes) else c for c in col_order_raw.tolist()]
+            elif isinstance(col_order_raw, (list, tuple)):
+                col_order = [c.decode("utf-8") if isinstance(c, bytes) else c for c in col_order_raw]
+        
+        # Clear all attributes on obs group
+        for attr in list(obs.attrs.keys()):
+            del obs.attrs[attr]
+        
+        obs.attrs["encoding-type"] = "dataframe"
+        obs.attrs["encoding-version"] = "0.2.0"
+        obs.attrs["_index"] = "_index"
+        
+        if col_order and len(col_order) > 0:
+            obs.attrs.create("column-order", data=np.array(col_order, dtype="S"))
+        
+        # Fix encoding on each column in obs
+        for col_name in obs.keys():
+            if col_name == "_index":
+                continue
+            col = obs[col_name]
+            
+            if isinstance(col, h5py.Group):
+                for attr in list(col.attrs.keys()):
+                    del col.attrs[attr]
+                col.attrs["encoding-type"] = "categorical"
+                col.attrs["encoding-version"] = "0.2.0"
+                col.attrs["ordered"] = False
+            elif isinstance(col, h5py.Dataset):
+                for attr in list(col.attrs.keys()):
+                    del col.attrs[attr]
+                if col.dtype.kind in ["U", "S", "O"]:
+                    col.attrs["encoding-type"] = "string-array"
+                    col.attrs["encoding-version"] = "0.2.0"
+                else:
+                    col.attrs["encoding-type"] = "array"
+                    col.attrs["encoding-version"] = "0.2.0"
+    
+    # Fix var group and its columns
+    if "var" in f:
+        var = f["var"]
+        
+        # Get column order from keys (excluding _index)
+        var_cols = [k for k in var.keys() if k != "_index"]
+        
+        for attr in list(var.attrs.keys()):
+            del var.attrs[attr]
+        var.attrs["encoding-type"] = "dataframe"
+        var.attrs["encoding-version"] = "0.2.0"
+        var.attrs["_index"] = "_index"
+        
+        # CRITICAL: Always write column-order, even if empty
+        if var_cols:
+            var.attrs.create("column-order", data=np.array(var_cols, dtype="S"))
+        else:
+            var.attrs.create("column-order", data=np.array([], dtype="S"))
+        
+        for col_name in var.keys():
+            if col_name == "_index":
+                continue
+            col = var[col_name]
+            if isinstance(col, h5py.Group):
+                for attr in list(col.attrs.keys()):
+                    del col.attrs[attr]
+                col.attrs["encoding-type"] = "categorical"
+                col.attrs["encoding-version"] = "0.2.0"
+                col.attrs["ordered"] = False
+            elif isinstance(col, h5py.Dataset):
+                for attr in list(col.attrs.keys()):
+                    del col.attrs[attr]
+                if col.dtype.kind in ["U", "S", "O"]:
+                    col.attrs["encoding-type"] = "string-array"
+                    col.attrs["encoding-version"] = "0.2.0"
+                else:
+                    col.attrs["encoding-type"] = "array"
+                    col.attrs["encoding-version"] = "0.2.0"
+    
+    # Fix empty dict groups and obsm contents
+    for grp_name in ["obsm", "varm", "obsp", "varp", "uns", "layers"]:
+        if grp_name in f:
+            grp = f[grp_name]
+            for attr in list(grp.attrs.keys()):
+                del grp.attrs[attr]
+            grp.attrs["encoding-type"] = "dict"
+            grp.attrs["encoding-version"] = "0.1.0"
+    
+    # Fix obsm entries - check dimensions and remove bad ones
+    if "obsm" in f:
+        obsm = f["obsm"]
+        n_obs = %d  # n_cells passed to function
+        for key in list(obsm.keys()):
+            item = obsm[key]
+            if isinstance(item, h5py.Dataset):
+                shape = item.shape
+                if len(shape) == 1:
+                    print(f"  Warning: obsm/{key} is 1D with shape {shape}, deleting")
+                    del obsm[key]
+                elif shape[0] != n_obs:
+                    print(f"  Warning: obsm/{key} has shape {shape}, expected ({n_obs}, ...), deleting")
+                    del obsm[key]
+
+print("  H5AD encoding finalized successfully")
+', h5file, n_cells, n_genes, n_cells)
+    
+    reticulate::py_run_string(py_code)
+    return(invisible(TRUE))
+    
+  }, error = function(e) {
+    warning("Could not finalize H5AD with Python: ", e$message)
+    return(invisible(FALSE))
+  })
 }
 
 
@@ -219,17 +424,6 @@ export_chunked_h5ad <- function(obj, export_dir, chunk_size = 50000) {
   
   rm(combined_data, combined_indices, indptr_vec); gc()
   
-  # CRITICAL: Write shape using the special function that creates proper INT64 attribute
-  write_int_array_attribute(h5ad_path, "X", "shape", c(n_cells, n_genes))
-  
-  # Write string attributes for encoding
-  fid <- H5Fopen(h5ad_path)
-  gid <- H5Gopen(fid, "X")
-  h5writeAttribute("csr_matrix", gid, "encoding-type")
-  h5writeAttribute("0.1.0", gid, "encoding-version")
-  H5Gclose(gid)
-  H5Fclose(fid)
-  
   # Write metadata
   log_message("Writing cell metadata...")
   write_obs_to_h5ad(obj@meta.data, h5ad_path, cell_names)
@@ -240,8 +434,21 @@ export_chunked_h5ad <- function(obj, export_dir, chunk_size = 50000) {
   log_message("Writing embeddings...")
   write_obsm_to_h5ad(obj, h5ad_path)
   
-  # Write empty groups with proper encoding
-  write_empty_groups(h5ad_path)
+  # CRITICAL: Use Python to finalize encoding attributes
+  # This ensures the H5AD is readable by anndata/scanpy
+  if (requireNamespace("reticulate", quietly = TRUE)) {
+    finalize_h5ad_with_python(h5ad_path, n_cells, n_genes)
+  } else {
+    # Fallback: try to set attributes with rhdf5
+    write_int_array_attribute(h5ad_path, "X", "shape", c(n_cells, n_genes))
+    fid <- H5Fopen(h5ad_path)
+    gid <- H5Gopen(fid, "X")
+    h5writeAttribute("csr_matrix", gid, "encoding-type")
+    h5writeAttribute("0.1.0", gid, "encoding-version")
+    H5Gclose(gid)
+    H5Fclose(fid)
+    write_empty_groups(h5ad_path)
+  }
   
   log_message(sprintf("H5AD saved: %s", h5ad_path))
   return(h5ad_path)
@@ -285,22 +492,24 @@ export_standard_h5ad <- function(obj, export_dir) {
   h5write(as.integer(mat_csr@j), h5ad_path, "X/indices")
   h5write(as.integer(mat_csr@p), h5ad_path, "X/indptr")
   
-  # CRITICAL: Write shape using the special function that creates proper INT64 attribute
-  write_int_array_attribute(h5ad_path, "X", "shape", c(n_cells, n_genes))
-  
-  # Write string attributes for encoding
-  fid <- H5Fopen(h5ad_path)
-  gid <- H5Gopen(fid, "X")
-  h5writeAttribute("csr_matrix", gid, "encoding-type")
-  h5writeAttribute("0.1.0", gid, "encoding-version")
-  H5Gclose(gid)
-  H5Fclose(fid)
-  
   # Write metadata
   write_obs_to_h5ad(obj@meta.data, h5ad_path, cell_names)
   write_var_to_h5ad(gene_names, h5ad_path)
   write_obsm_to_h5ad(obj, h5ad_path)
-  write_empty_groups(h5ad_path)
+  
+  # CRITICAL: Use Python to finalize encoding attributes
+  if (requireNamespace("reticulate", quietly = TRUE)) {
+    finalize_h5ad_with_python(h5ad_path, n_cells, n_genes)
+  } else {
+    write_int_array_attribute(h5ad_path, "X", "shape", c(n_cells, n_genes))
+    fid <- H5Fopen(h5ad_path)
+    gid <- H5Gopen(fid, "X")
+    h5writeAttribute("csr_matrix", gid, "encoding-type")
+    h5writeAttribute("0.1.0", gid, "encoding-version")
+    H5Gclose(gid)
+    H5Fclose(fid)
+    write_empty_groups(h5ad_path)
+  }
   
   log_message(sprintf("H5AD saved: %s", h5ad_path))
   return(h5ad_path)
@@ -427,10 +636,29 @@ write_var_to_h5ad <- function(gene_names, h5ad_path) {
 #' Write obsm (embeddings) to H5AD
 write_obsm_to_h5ad <- function(obj, h5ad_path) {
   
+  n_cells <- ncol(obj)
+  
   for (red_name in names(obj@reductions)) {
     emb <- Embeddings(obj, reduction = red_name)
+    
+    # Ensure it's a matrix with correct dimensions
+    if (!is.matrix(emb)) {
+      emb <- as.matrix(emb)
+    }
+    
+    # Check dimensions - should be n_cells x n_dims
+    if (nrow(emb) != n_cells) {
+      warning(sprintf("Embedding %s has %d rows but expected %d cells. Skipping.", 
+                      red_name, nrow(emb), n_cells))
+      next
+    }
+    
     # AnnData convention: X_pca, X_umap, etc.
     key <- paste0("X_", tolower(red_name))
+    
+    log_message(sprintf("  Writing %s: %d x %d", key, nrow(emb), ncol(emb)))
+    
+    # Write as 2D array - force dimensions
     h5write(emb, h5ad_path, paste0("obsm/", key))
   }
   
