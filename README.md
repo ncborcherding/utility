@@ -12,7 +12,6 @@ the data set for everyone, a complete summary of the sequencing runs and the sam
 This involves several steps 1) loading the respective GE data, 2) harmonizing the data by sample and cohort information, 3) iterating through automatic annotation, 
 and 4) adding the TCR information. This information is stored in the meta data of the Seurat objects - an explanation of each variable is available [here](https://github.com/ncborcherding/utility/blob/dev/summary/metadata_headers.txt).
 
-
 ### Folder Structure
 ```
 ├── config.yaml         - parameters control for processing and integrating
@@ -117,10 +116,14 @@ As of right now, there is no citation associated with the assembled data set. Ho
 each data set summarized above or can be found in the [summary table](https://github.com/ncborcherding/utility/blob/main/summaryInfo/cohortSummaryTable.csv). In addition, if using the processed data, feel free to modify the language in the methods section (above) and please cite the appropriate manuscripts of the software or references that were used.
 
 #### Itemized List of the Software Used
-* Seurat v5.0.0 - [citation](https://pubmed.ncbi.nlm.nih.gov/37231261/)  
-* singler v2.2.0 - [citation](https://pubmed.ncbi.nlm.nih.gov/30643263/)  
+* Seurat v5.3.1 - [citation](https://pubmed.ncbi.nlm.nih.gov/37231261/)  
+* Singler v2.10.0 - [citation](https://pubmed.ncbi.nlm.nih.gov/30643263/)  
 * Azimuth v0.4.6.9004 - [citation](https://pubmed.ncbi.nlm.nih.gov/34062119/) 
-* scRepertoire v2.0.0 - [citation](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7400693/)  
+* scRepertoire v2.0.0 - [citation](https://pubmed.ncbi.nlm.nih.gov/40577285/)
+* scanpy v1.9 - [citation](https://pubmed.ncbi.nlm.nih.gov/29409532/)
+* scVI - [citation](https://pubmed.ncbi.nlm.nih.gov/30504886/)
+* scANVI - [citation](https://pubmed.ncbi.nlm.nih.gov/33491336/)
+* scirpy - [citation](https://pubmed.ncbi.nlm.nih.gov/32614448/)
 
 #### Itemized List of Reference Data Used
 * Human Primary Cell Atlas (HPCA) - [citation](https://pubmed.ncbi.nlm.nih.gov/24053356/)  

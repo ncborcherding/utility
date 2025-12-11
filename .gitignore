@@ -13,3 +13,4 @@
 /results/01_bpcells_data_FULL
 *.tsv
 results/09_scanpy_export/mudata.h5mu
+data/processedData.zip

@@ -163,7 +163,7 @@ run_pipeline <- function(config_path) {
   #Step 13: Automatically update README and summary tables
   summarise_cohort() 
  
-  writeLines(capture.output(sessionInfo()), "/summary/sessionInfo.txt")
+  writeLines(capture.output(sessionInfo()), "./summary/sessionInfo.txt")
   
   log_message("=== Pipeline Finished Successfully ===")
 }
