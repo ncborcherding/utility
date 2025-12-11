@@ -306,10 +306,10 @@ export_to_scanpy <- function(config_path = "config.yaml",
   needs_chunking <- nnz_estimate > 2e9
   
   if (needs_chunking) {
-    log_message("Matrix exceeds dgCMatrix limit - using chunked HDF5 export")
+    log_message("[1/3] Matrix exceeds dgCMatrix limit - using chunked HDF5 export")
     h5ad_path <- export_chunked_h5ad(obj, export_dir, chunk_size)
   } else {
-    log_message("Matrix within limits - using standard export")
+    log_message("[1/3] Matrix within limits - using standard export")
     h5ad_path <- export_standard_h5ad(obj, export_dir)
   }
   
@@ -319,7 +319,7 @@ export_to_scanpy <- function(config_path = "config.yaml",
   # Create H5MU
   h5mu_path <- NULL
   if (create_h5mu && !is.null(airr_path)) {
-    log_message("\n[3/4] Creating H5MU (MuData) with scirpy-compatible AIRR...")
+    log_message("\n[2/3] Creating H5MU (MuData) with scirpy-compatible AIRR...")
     
     if (use_reticulate && requireNamespace("reticulate", quietly = TRUE)) {
       h5mu_path <- create_h5mu_with_reticulate(h5ad_path, airr_path, export_dir)
@@ -328,12 +328,8 @@ export_to_scanpy <- function(config_path = "config.yaml",
       log_message("  Generated create_h5mu.py - run manually or with: python3 create_h5mu.py")
     }
   } else {
-    log_message("\n[3/4] Skipping H5MU creation (no AIRR data or create_h5mu=FALSE)")
+    log_message("\n[3/3] Skipping H5MU creation (no AIRR data or create_h5mu=FALSE)")
   }
-  
-  log_message("\n[4/4] Generating documentation and verification scripts...")
-  generate_verification_script(export_dir)
-  generate_h5mu_creator_script(export_dir)
   
   log_message("=== Export Complete ===")
   log_message(sprintf("Output directory: %s", export_dir))
@@ -970,45 +966,4 @@ print("\\nSaved: mudata.h5mu")
 }
 
 
-#' Generate verification script
-generate_verification_script <- function(export_dir) {
-  
-  script <- '#!/usr/bin/env python3
-"""
-Verify the exported H5AD file loads correctly in scanpy.
-"""
 
-import sys
-
-try:
-    import scanpy as sc
-    import anndata as ad
-except ImportError as e:
-    print(f"Missing: {e}")
-    sys.exit(1)
-
-print(f"scanpy: {sc.__version__}")
-print(f"anndata: {ad.__version__}")
-
-print("\\nLoading adata.h5ad...")
-try:
-    adata = sc.read_h5ad("adata.h5ad")
-    print(f"✓ Loaded: {adata.n_obs} cells x {adata.n_vars} genes")
-    print(f"  obs columns: {list(adata.obs.columns)[:5]}...")
-    print(f"  obsm keys: {list(adata.obsm.keys())}")
-    
-    if hasattr(adata.X, "nnz"):
-        print(f"  Matrix: sparse, {adata.X.nnz:,} non-zeros")
-    
-    print("\\n✓ H5AD verification passed!")
-    
-except Exception as e:
-    print(f"✗ Error: {e}")
-    import traceback
-    traceback.print_exc()
-    sys.exit(1)
-'
-  
-  writeLines(script, file.path(export_dir, "verify_export.py"))
-  log_message("  Generated: verify_export.py")
-}
