@@ -157,7 +157,8 @@ run_pipeline <- function(config_path) {
   )
   saveRDS(results$object, file.path(cfg$paths$results_dir, "FINAL_integrated_object.rds"))
   
-  #TODO #Step 12: Export to scanpy/scirpy issue #15 on github
+  #Step 12: Export to scanpy/scirpy 
+  export_to_scanpy()
   
   #Step 13: Automatically update README and summary tables
   summarise_cohort() 
