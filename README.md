@@ -129,20 +129,102 @@ each data set summarized above or can be found in the [summary table](https://gi
 
 *****
 
-### Future Directions
+### Installation
 
-* Unified Dimensional Reduction of T cells with Cluster Annotations
-* Data Hosting for Interactive Analysis
-* Easy Submission Portal for Researchers to Add Data
-* Using the Data to Build a Reference Atlas
+If you are interested in the set up and running of the evalauation of the uTILity 
+pipeline, please download the `processedData` file from the [zenodo](https://zenodo.org/uploads/10211240) 
+archive, unzip and place it in the `./data` directory.
 
-There are areas in which we are actively hoping to develop to further facilitate the usefulness of the data set - if you have other suggestions, please reach out using the contact information below.
+#### Step 1: Clone the Repository
+```
+git clone https://github.com/ncborcherding/utility
+cd utility
+```
+
+#### Step 2: Create the Conda Environment
+
+The pipeline uses a single conda environment for all Python dependencies.
+
+```
+# Create the environment (this may take 5-10 minutes)
+conda env create -f environment.yml
+
+# Verify installation
+conda activate sc-integration-benchmark
+python -c "import scvi; import scanpy; print('✓ Python packages OK')"
+conda deactivate
+```
+##### GPU Setup 
+
+For NVIDIA GPU acceleration, edit `environment.yml` before creating the environment:
+
+Comment out - `cpuonly`
+Uncomment the appropriate CUDA version:
+
+```
+# Option B: CUDA 11.8
+- pytorch>=2.2
+- pytorch-cuda=11.8
+
+# OR Option C: CUDA 12.1
+- pytorch>=2.2
+- pytorch-cuda=12.1
+```
+
+Verify GPU detection after installation:
+
+```
+conda activate sc-integration-benchmark
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+```
+
+##### Apple Silicon (M1/M2/M3)
+
+The CPU-only configuration works on Apple Silicon. MPS (Metal Performance Shaders) acceleration is automatically detected but has limitations:
+
+* Mixed precision is not supported on MPS; the scripts automatically force precision: `"32-true"`
+* Batch sizes are capped at 128 for stability
+* Performance is good but not as fast as NVIDIA GPUs
+
+No changes to `environment.yml` are needed for Apple Silicon.
+
+#### Step 3: Install R Packages
+
+```
+# Install BiocManager if needed
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+# Core packages
+install.packages(c("Seurat", "yaml", "dplyr", "data.table", "reticulate"))
+
+# Bioconductor packages
+BiocManager::install(c("batchelor", "rhdf5"))
+
+# SeuratDisk (for h5ad conversion)
+remotes::install_github("mojaveazure/seurat-disk")
+```
+
+#### Step 4: Configure reticulate
+
+Configure per-session in R:
+
+```
+library(reticulate)
+
+# Use the conda environment
+use_condaenv("sc-integration-benchmark", required = TRUE)
+
+# Verify
+py_config()
+```
 
 *****
 
 ### License
 
-The data and analysis of uTILity is provided under a CC BY-ND 4.0 license, please feel free to remix, transform, and build upon the material. However, the intent of this resource is noncommercial.
+The data and analysis of uTILity is provided under a CC BY-ND 4.0 license, please feel free 
+to remix, transform, and build upon the material. However, the intent of this resource is noncommercial.
 
 *****
 

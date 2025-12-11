@@ -1,21 +1,62 @@
 name: sc-integration-benchmark
 channels:
   - conda-forge
+  - pytorch
+  - nvidia  # For CUDA support on Linux (ignored on macOS)
 dependencies:
+  # ─────────────────────────────────────────────────────────────────────────────
   # Core Python
+  # ─────────────────────────────────────────────────────────────────────────────
   - python=3.10
   - pip
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Scientific Stack
+  # ─────────────────────────────────────────────────────────────────────────────
   - numpy>=1.25
   - pandas>=2.0
   - scipy>=1.10
-  - h5py
-  - matplotlib
-  - seaborn
-  - scikit-learn
-  - python-igraph
-  - leidenalg
-  - pytorch=2.3.*
+  - h5py>=3.8
+  - matplotlib>=3.7
+  - seaborn>=0.12
+  - scikit-learn>=1.2
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Graph/Clustering (for Leiden, UMAP neighbors)
+  # ─────────────────────────────────────────────────────────────────────────────
+  - python-igraph>=0.10
+  - leidenalg>=0.9
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PyTorch - Choose ONE of the following options before creating the environment:
+  #
+  # Option A: CPU only (default, works everywhere)
+  - pytorch>=2.2
+  - cpuonly
+  #
+  # Option B: CUDA 11.8 (uncomment below, comment out cpuonly above)
+  # - pytorch>=2.2
+  # - pytorch-cuda=11.8
+  #
+  # Option C: CUDA 12.1 (uncomment below, comment out cpuonly above)
+  # - pytorch>=2.2
+  # - pytorch-cuda=12.1
+  #
+  # Option D: macOS MPS (Apple Silicon) - just use the CPU version; MPS is auto-detected
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Pip-installed packages (versions pinned for reproducibility)
+  # ─────────────────────────────────────────────────────────────────────────────
   - pip:
-      - scvi-tools==1.3.*
-      - scanpy==1.11.*
-      - anndata[zarr]   # installs zarr support as an extra
+      # Core single-cell ecosystem
+      - scvi-tools>=1.1,<1.4       # scVI, scANVI models
+      - scanpy>=1.9,<1.12          # Preprocessing, HVG selection
+      - anndata>=0.10              # AnnData I/O (zarr support included)
+      
+      # Multi-modal / TCR/BCR analysis (for export script)
+      - muon>=0.1.5                # MuData for multi-modal
+      - scirpy>=0.18               # TCR/BCR analysis
+      
+      # YAML config parsing
+      - pyyaml>=6.0
