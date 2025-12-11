@@ -95,8 +95,9 @@ run_pipeline <- function(config_path) {
 
   # Step 5: Rank methods based on all collected metrics
   log_message("=== Aggregating Metrics and Ranking Methods ===")
-  best_method <- rank_methods(config_path)   
-  best_method <- read.csv(best_method)[["method"]][2] # Not using SCANVI
+  best_method <- rank_methods(config_path)  
+  method_df <- read.csv(best_method)
+  best_method <- method_df$method[method_df$method != "scanvi"][1]
   log_message("Best integration method selected:", best_method)
   
   # Step 6: Generate final summary plots

@@ -193,11 +193,230 @@ make_final_object <- function(cfg, best_method, k, resolution) {
   obj.integrated$leiden.cluster <- cl$membership
   Idents(obj.integrated) <- "leiden.cluster"
   
-  # 8. Save Final
+  # 8. Generate Plots
+  generate_final_plots(obj.integrated, cfg, output_prefix = "06_")
+
+  # 9. Save Final
   final_out_path <- file.path(cfg$paths$results_dir, "FINAL_integrated_object.rds")
   log_message("Saving Final Object to: ", final_out_path)
   safe_save_rds(obj.integrated, final_out_path)
   
   log_message("=== Final Object Created Successfully ===")
   return(final_out_path)
+}
+
+  # =============================================================================
+  # HELPER: Generate Summary Plots
+  # =============================================================================
+
+#' Generate summary UMAP plots for the final integrated object
+generate_final_plots <- function(obj, config, output_prefix = "FINAL") {
+  
+  log_message("--- Generating Summary Plots ---")
+  
+  fig_dir <- config$paths$figures_dir
+  if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+  
+  batch_var <- config$methods$harmony$group_by_vars[1]
+  labels_l1 <- "predicted.celltype.l1"
+  labels_l2 <- config$post_integration$labels %||% "predicted.celltype.l2"
+  
+  available_vars <- colnames(obj@meta.data)
+  
+  # Use rasterization for large datasets
+  use_raster <- ncol(obj) > 50000
+  raster_dpi <- c(512, 512)
+  pt_size <- if(ncol(obj) > 500000) 0.8 else if(ncol(obj) > 100000) 1.6 else 2
+  
+  # ---------------------------------------------------------------------------
+  # 1. UMAP by Batch
+  # ---------------------------------------------------------------------------
+  if (batch_var %in% available_vars) {
+    log_message("  Plotting UMAP by batch...")
+    
+    n_batches <- length(unique(obj[[batch_var, drop = TRUE]]))
+    
+    p_batch <- DimPlot(obj, 
+                       reduction = "umap", 
+                       group.by = batch_var, 
+                       pt.size = pt_size,
+                       raster = use_raster,
+                       raster.dpi = raster_dpi) +
+      labs(title = paste0("Batch: ", batch_var),
+           subtitle = paste0(format(ncol(obj), big.mark = ","), " cells | ",
+                             n_batches, " batches")) +
+      scale_color_viridis(option = "H", discrete = TRUE) +
+      guides(color = "none") +
+      theme_minimal() +
+      theme(plot.title = element_text(face = "bold"))
+    
+    ggsave(file.path(fig_dir, paste0(output_prefix, "_umap_batch.png")),
+           p_batch, width = 10, height = 8, dpi = 300, bg = "white")
+  }
+  
+  # ---------------------------------------------------------------------------
+  # 2. UMAP by Cell Type L1
+  # ---------------------------------------------------------------------------
+  if (labels_l1 %in% available_vars) {
+    log_message("  Plotting UMAP by cell type L1...")
+    
+    n_types <- length(unique(obj[[labels_l1, drop = TRUE]]))
+    colors_l1 <- colorRampPalette(brewer.pal(12, "Paired"))(n_types)
+    
+    p_l1 <- DimPlot(obj, 
+                    reduction = "umap", 
+                    group.by = labels_l1, 
+                    pt.size = pt_size,
+                    label = TRUE,
+                    label.size = 3,
+                    repel = TRUE,
+                    raster = use_raster,
+                    raster.dpi = raster_dpi) +
+      labs(title = "Cell Type (L1)") +
+      scale_color_manual(values = colors_l1) +
+      guides(color = guide_legend(override.aes = list(size = 3), ncol = 1)) +
+      theme_minimal() +
+      theme(plot.title = element_text(face = "bold"))
+    
+    ggsave(file.path(fig_dir, paste0(output_prefix, "_umap_celltype_l1.png")),
+           p_l1, width = 12, height = 8, dpi = 300, bg = "white")
+  }
+  
+  # ---------------------------------------------------------------------------
+  # 3. UMAP by Cell Type L2
+  # ---------------------------------------------------------------------------
+  if (labels_l2 %in% available_vars) {
+    log_message("  Plotting UMAP by cell type L2...")
+    
+    n_types <- length(unique(obj[[labels_l2, drop = TRUE]]))
+    colors_l2 <- colorRampPalette(brewer.pal(12, "Set3"))(n_types)
+    
+    p_l2 <- DimPlot(obj, 
+                    reduction = "umap", 
+                    group.by = labels_l2, 
+                    pt.size = pt_size,
+                    label = TRUE,
+                    label.size = 2,
+                    repel = TRUE,
+                    raster = use_raster,
+                    raster.dpi = raster_dpi) +
+      labs(title = "Cell Type (L2)") +
+      scale_color_manual(values = colors_l2) +
+      guides(color = guide_legend(override.aes = list(size = 2), ncol = 2)) +
+      theme_minimal() +
+      theme(plot.title = element_text(face = "bold"),
+            legend.text = element_text(size = 6))
+    
+    ggsave(file.path(fig_dir, paste0(output_prefix, "_umap_celltype_l2.png")),
+           p_l2, width = 14, height = 8, dpi = 300, bg = "white")
+  }
+  
+  # ---------------------------------------------------------------------------
+  # 4. UMAP by Cluster
+  # ---------------------------------------------------------------------------
+  if ("leiden.cluster" %in% available_vars) {
+    log_message("  Plotting UMAP by cluster...")
+    
+    n_clusters <- length(unique(obj$leiden.cluster))
+    
+    p_cluster <- DimPlot(obj, 
+                         reduction = "umap", 
+                         group.by = "leiden.cluster", 
+                         pt.size = pt_size,
+                         label = TRUE,
+                         label.size = 4,
+                         raster = use_raster,
+                         raster.dpi = raster_dpi) +
+      labs(title = "Leiden Clusters",
+           subtitle = paste0(n_clusters, " clusters")) +
+      scale_color_viridis_d(option = "turbo") +
+      guides(color = "none") +
+      theme_minimal() +
+      theme(plot.title = element_text(face = "bold"))
+    
+    ggsave(file.path(fig_dir, paste0(output_prefix, "_umap_clusters.png")),
+           p_cluster, width = 10, height = 8, dpi = 300, bg = "white")
+  }
+  
+  # ---------------------------------------------------------------------------
+  # 5. UMAP by Tissue
+  # ---------------------------------------------------------------------------
+  if ("tissue" %in% available_vars) {
+    log_message("  Plotting UMAP by tissue...")
+    
+    tissue_colors <- c("Tumor" = "#E41A1C", "Normal" = "#377EB8", 
+                       "Blood" = "#4DAF4A", "LN" = "#984EA3", 
+                       "Met" = "#FF7F00", "Juxta" = "#FFFF33")
+    
+    p_tissue <- DimPlot(obj, 
+                        reduction = "umap", 
+                        group.by = "tissue", 
+                        pt.size = pt_size,
+                        raster = use_raster,
+                        raster.dpi = raster_dpi) +
+      labs(title = "Tissue Type") +
+      scale_color_manual(values = tissue_colors, na.value = "grey80") +
+      guides(color = guide_legend(override.aes = list(size = 4))) +
+      theme_minimal() +
+      theme(plot.title = element_text(face = "bold"))
+    
+    ggsave(file.path(fig_dir, paste0(output_prefix, "_umap_tissue.png")),
+           p_tissue, width = 10, height = 8, dpi = 300, bg = "white")
+  }
+  
+  # ---------------------------------------------------------------------------
+  # 6. UMAP by Clonal Expansion
+  # ---------------------------------------------------------------------------
+  if ("cloneSize" %in% available_vars) {
+    log_message("  Plotting UMAP by clonal expansion...")
+    
+    p_clone <- DimPlot(obj, 
+                       reduction = "umap", 
+                       group.by = "cloneSize", 
+                       pt.size = pt_size,
+                       raster = use_raster,
+                       raster.dpi = raster_dpi) +
+      labs(title = "Clonal Expansion") +
+      scale_color_viridis(option = "B", discrete = TRUE, na.value = "grey") +
+      guides(color = guide_legend(override.aes = list(size = 4))) +
+      theme_minimal() +
+      theme(plot.title = element_text(face = "bold"))
+    
+    ggsave(file.path(fig_dir, paste0(output_prefix, "_umap_clonalExpansion.png")),
+           p_clone, width = 11, height = 8, dpi = 300, bg = "white")
+  }
+  
+  # ---------------------------------------------------------------------------
+  # 7. Feature Plots (T cell markers)
+  # ---------------------------------------------------------------------------
+  log_message("  Plotting T cell markers...")
+    
+  markers <- c("CD3E", "CD4", "CD8A", "CD8B", 
+               "FOXP3", "CCR7", "TCF7", "SELL",
+               "GZMB", "PRF1", "IFNG", "PDCD1",
+               "HAVCR2", "LAG3", "TIGIT", "TOX")
+    
+  available_markers <- intersect(markers, rownames(obj))
+    
+  if (length(available_markers) >= 4) {
+      for (i in seq(1, min(length(available_markers), 12), by = 4)) {
+        batch_markers <- available_markers[i:min(i+3, length(available_markers))]
+        
+        p_feat <- FeaturePlot(obj, 
+                              features = batch_markers, 
+                              reduction = "umap",
+                              pt.size = pt_size * 0.5,
+                              ncol = 2,
+                              raster = use_raster,
+                              raster.dpi = raster_dpi) &
+          scale_color_viridis_c() &
+          theme_minimal()
+        
+        batch_num <- ceiling(i / 4)
+        ggsave(file.path(fig_dir, paste0(output_prefix, "_umap_markers_", batch_num, ".png")),
+               p_feat, width = 10, height = 10, dpi = 300, bg = "white")
+      }
+    }
+  
+  log_message("--- Plots saved to: ", fig_dir, " ---")
 }
