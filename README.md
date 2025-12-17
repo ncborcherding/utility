@@ -226,7 +226,7 @@ py_config()
 
 ### License
 
-The data and analysis of uTILity is provided under a CC BY-ND 4.0 license, please feel free 
+The data and analysis of uTILity is provided under a CC BY-NC 4.0 license, please feel free 
 to remix, transform, and build upon the material. However, the intent of this resource is noncommercial.
 
 *****
