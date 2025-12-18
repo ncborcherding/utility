@@ -524,7 +524,7 @@ export_to_scanpy <- function(config_path = "config.yaml",
   
   # Generate helpers
   generate_verification_script(output_dir)
-  generate_readme(output_dir, n_cells, n_genes, !is.null(airr_path), total_nnz)
+  generate_info(output_dir, n_cells, n_genes, !is.null(airr_path), total_nnz)
   
   # Final verification
   log_message("")
@@ -719,7 +719,7 @@ Verify: python verify_export.py
                     if(has_airr) "airr_rearrangement.tsv.gz - TCR (AIRR format, gzip)" else "",
                     if(has_airr) "\nTCR (Python):\n  import pandas as pd\n  import scirpy as ir\n  # Load gzipped AIRR via pandas\n  airr_df = pd.read_csv('airr_rearrangement.tsv.gz', sep='\\\\t', compression='gzip')\n  airr_df.to_csv('temp.tsv', sep='\\\\t', index=False)\n  adata_tcr = ir.io.read_airr('temp.tsv')" else ""
   )
-  writeLines(readme, file.path(output_dir, "README.txt"))
+  writeLines(readme, file.path(output_dir, "INFO.txt"))
   
   if (has_airr) {
     h5mu_script <- '#!/usr/bin/env python3

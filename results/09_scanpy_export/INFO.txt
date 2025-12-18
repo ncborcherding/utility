@@ -1,0 +1,33 @@
+uTILity Export
+==============
+2,606,129 cells × 78,211 genes
+3,273,059,701 non-zeros (int64 indices)
+
+Files:
+  adata.h5ad - Gene expression
+  airr_rearrangement.tsv.gz - TCR (AIRR format, gzip)
+  verify_export.py - Verification
+
+Python:
+  import scanpy as sc
+  adata = sc.read_h5ad("adata.h5ad")
+
+R (zellkonverter):
+  library(zellkonverter)
+  sce <- readH5AD("adata.h5ad")
+  obj <- as.Seurat(sce, counts="X", data=NULL)
+
+R (SeuratDisk):
+  library(SeuratDisk)
+  Convert("adata.h5ad", dest="h5seurat")
+  obj <- LoadH5Seurat("adata.h5seurat")
+
+TCR (Python):
+  import pandas as pd
+  import scirpy as ir
+  # Load gzipped AIRR via pandas
+  airr_df = pd.read_csv('airr_rearrangement.tsv.gz', sep='\\t', compression='gzip')
+  airr_df.to_csv('temp.tsv', sep='\\t', index=False)
+  adata_tcr = ir.io.read_airr('temp.tsv')
+Verify: python verify_export.py
+
